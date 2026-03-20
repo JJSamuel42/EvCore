@@ -6,15 +6,122 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+// Population data sourced from national census bureaux and World Bank (2023 estimates).
+// Age brackets: pediatric 0–12 (narrow) / under-18 (broad), adults 18+,
+// elderly 50+, 60+, 65+.
 export const COUNTRIES: CountryData[] = [
-  { code: 'US', name: 'United States', flag: '🇺🇸', population: 331000000 },
-  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', population: 67000000 },
-  { code: 'FR', name: 'France', flag: '🇫🇷', population: 68000000 },
-  { code: 'DE', name: 'Germany', flag: '🇩🇪', population: 83000000 },
-  { code: 'IT', name: 'Italy', flag: '🇮🇹', population: 60000000 },
-  { code: 'ES', name: 'Spain', flag: '🇪🇸', population: 47000000 },
-  { code: 'CN', name: 'China', flag: '🇨🇳', population: 1412000000 },
-  { code: 'JP', name: 'Japan', flag: '🇯🇵', population: 126000000 },
+  {
+    code: 'US', name: 'United States', flag: '🇺🇸',
+    population: 335893238,
+    dataSource: 'US Census Bureau 2023 estimate',
+    dataYear: 2023,
+    ageDistribution: {
+      pediatric0to12:   49400000,  // ~14.7 %
+      pediatricUnder18: 73700000,  // ~21.9 %
+      adults18plus:    262200000,  // ~78.1 %
+      elderly50plus:   121100000,  // ~36.1 %
+      elderly60plus:    75900000,  // ~22.6 %
+      elderly65plus:    58000000,  // ~17.3 %
+    },
+  },
+  {
+    code: 'GB', name: 'United Kingdom', flag: '🇬🇧',
+    population: 67736802,
+    dataSource: 'ONS Mid-year population estimates 2022',
+    dataYear: 2022,
+    ageDistribution: {
+      pediatric0to12:    9400000,  // ~13.9 %
+      pediatricUnder18: 13900000,  // ~20.5 %
+      adults18plus:     53800000,  // ~79.5 %
+      elderly50plus:    25300000,  // ~37.4 %
+      elderly60plus:    16100000,  // ~23.8 %
+      elderly65plus:    12600000,  // ~18.6 %
+    },
+  },
+  {
+    code: 'FR', name: 'France', flag: '🇫🇷',
+    population: 68373433,
+    dataSource: 'INSEE Bilan démographique 2023',
+    dataYear: 2023,
+    ageDistribution: {
+      pediatric0to12:    9200000,  // ~13.5 %
+      pediatricUnder18: 14000000,  // ~20.5 %
+      adults18plus:     54400000,  // ~79.5 %
+      elderly50plus:    24600000,  // ~36.0 %
+      elderly60plus:    16900000,  // ~24.7 %
+      elderly65plus:    13900000,  // ~20.3 %
+    },
+  },
+  {
+    code: 'DE', name: 'Germany', flag: '🇩🇪',
+    population: 84482267,
+    dataSource: 'Destatis (Federal Statistical Office) 2023',
+    dataYear: 2023,
+    ageDistribution: {
+      pediatric0to12:    9700000,  // ~11.5 %
+      pediatricUnder18: 14700000,  // ~17.4 %
+      adults18plus:     69700000,  // ~82.6 %
+      elderly50plus:    33700000,  // ~39.9 %
+      elderly60plus:    22500000,  // ~26.7 %
+      elderly65plus:    18700000,  // ~22.2 %
+    },
+  },
+  {
+    code: 'IT', name: 'Italy', flag: '🇮🇹',
+    population: 58870762,
+    dataSource: 'ISTAT Demographic Balance 2023',
+    dataYear: 2023,
+    ageDistribution: {
+      pediatric0to12:    6300000,  // ~10.7 %
+      pediatricUnder18:  9900000,  // ~16.8 %
+      adults18plus:     49000000,  // ~83.2 %
+      elderly50plus:    24400000,  // ~41.4 %
+      elderly60plus:    17000000,  // ~28.9 %
+      elderly65plus:    14200000,  // ~24.1 %
+    },
+  },
+  {
+    code: 'ES', name: 'Spain', flag: '🇪🇸',
+    population: 47814906,
+    dataSource: 'INE (Instituto Nacional de Estadística) 2023',
+    dataYear: 2023,
+    ageDistribution: {
+      pediatric0to12:    5400000,  // ~11.3 %
+      pediatricUnder18:  8300000,  // ~17.4 %
+      adults18plus:     39500000,  // ~82.6 %
+      elderly50plus:    17800000,  // ~37.2 %
+      elderly60plus:    12100000,  // ~25.3 %
+      elderly65plus:     9700000,  // ~20.3 %
+    },
+  },
+  {
+    code: 'CN', name: 'China', flag: '🇨🇳',
+    population: 1409670000,
+    dataSource: 'National Bureau of Statistics China / World Bank 2022',
+    dataYear: 2022,
+    ageDistribution: {
+      pediatric0to12:  176200000,  // ~12.5 %
+      pediatricUnder18: 234900000, // ~16.7 %
+      adults18plus:   1174800000,  // ~83.3 %
+      elderly50plus:   469700000,  // ~33.3 %
+      elderly60plus:   297000000,  // ~21.1 %
+      elderly65plus:   209000000,  // ~14.8 %
+    },
+  },
+  {
+    code: 'JP', name: 'Japan', flag: '🇯🇵',
+    population: 124516650,
+    dataSource: 'Statistics Bureau Japan 2023',
+    dataYear: 2023,
+    ageDistribution: {
+      pediatric0to12:   11500000,  //  ~9.2 %
+      pediatricUnder18: 17500000,  // ~14.1 %
+      adults18plus:    107000000,  // ~85.9 %
+      elderly50plus:    56500000,  // ~45.4 %
+      elderly60plus:    41000000,  // ~32.9 %
+      elderly65plus:    35900000,  // ~28.8 %
+    },
+  },
 ];
 
 const INITIAL_FUNNELS: Funnel[] = [

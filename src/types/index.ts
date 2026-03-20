@@ -191,11 +191,30 @@ export interface Funnel {
   updatedAt: string;
 }
 
+export interface AgeDistribution {
+  /** 0–12 years (narrow pediatric) */
+  pediatric0to12: number;
+  /** 0–17 years (broad pediatric / under-18) */
+  pediatricUnder18: number;
+  /** 18+ years (adults) */
+  adults18plus: number;
+  /** 50+ years */
+  elderly50plus: number;
+  /** 60+ years */
+  elderly60plus: number;
+  /** 65+ years (standard elderly threshold) */
+  elderly65plus: number;
+}
+
 export interface CountryData {
   code: string;
   name: string;
   flag: string;
   population: number;
+  ageDistribution: AgeDistribution;
+  /** Primary data source used (census bureau, World Bank, UN) */
+  dataSource: string;
+  dataYear: number;
 }
 
 // ============================================================

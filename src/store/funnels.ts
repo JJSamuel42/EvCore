@@ -226,7 +226,7 @@ export const useFunnelStore = create<FunnelState>()(
   persist(
     (set, get) => ({
       funnels: INITIAL_FUNNELS,
-      activeFunnelId: null,
+      activeFunnelId: INITIAL_FUNNELS[0]?.id ?? null,
 
       createFunnel: (data) => {
         const newFunnel: Funnel = {
@@ -358,6 +358,10 @@ export const useFunnelStore = create<FunnelState>()(
     }),
     {
       name: 'ehcore-funnels',
+      // Only persist the funnels list — activeFunnelId is ephemeral UI state.
+      // Persisting it caused the workspace to stay blank if the stored ID no
+      // longer matched any funnel, making the "Open" click appear broken.
+      partialize: (state) => ({ funnels: state.funnels }),
     }
   )
 );

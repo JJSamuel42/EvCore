@@ -10,6 +10,7 @@ import {
   ChevronRight,
   X,
   MessageSquare,
+  Settings2,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { AppShell } from '@/components/layout/AppShell';
@@ -23,6 +24,7 @@ import { SectionLabel, PageHeader } from '@/components/ui/SectionLabel';
 import { FunnelVisualization } from '@/components/patient-funnels/FunnelVisualization';
 import { FunnelLevelModal } from '@/components/patient-funnels/FunnelLevelModal';
 import { useFunnelStore, COUNTRIES } from '@/store/funnels';
+import { useAuthStore } from '@/store/auth';
 import { Funnel, FunnelLevel, FunnelArticle } from '@/types';
 import { cn, formatDate, getRelativeTime, generateId } from '@/lib/utils';
 
@@ -47,8 +49,12 @@ export default function PatientFunnelsPage() {
     removeArticleFromLevel,
   } = useFunnelStore();
 
+  const { user } = useAuthStore();
+  const canEdit = user?.role === 'admin' || user?.role === 'researcher';
+
   const activeFunnel = funnels.find((f) => f.id === activeFunnelId) || null;
 
+  const [adminMode, setAdminMode] = useState(false);
   const [showNewFunnelModal, setShowNewFunnelModal] = useState(false);
   const [activeLevelModal, setActiveLevelModal] = useState<FunnelLevel | null>(null);
 
@@ -180,33 +186,58 @@ export default function PatientFunnelsPage() {
                     <Button size="sm" variant="ghost" leftIcon={<Download className="w-3.5 h-3.5" />}>
                       Export
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      leftIcon={<Plus className="w-3.5 h-3.5" />}
-                      onClick={handleAddLevel}
-                    >
-                      Add Level
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      leftIcon={<Save className="w-3.5 h-3.5" />}
-                      onClick={() => updateFunnel(activeFunnel.id, {})}
-                    >
-                      Save
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant={adminMode ? 'primary' : 'secondary'}
+                        leftIcon={<Settings2 className="w-3.5 h-3.5" />}
+                        onClick={() => setAdminMode((p) => !p)}
+                      >
+                        {adminMode ? 'Exit Admin' : 'Admin Mode'}
+                      </Button>
+                    )}
+                    {adminMode && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          leftIcon={<Plus className="w-3.5 h-3.5" />}
+                          onClick={handleAddLevel}
+                        >
+                          Add Level
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          leftIcon={<Save className="w-3.5 h-3.5" />}
+                          onClick={() => updateFunnel(activeFunnel.id, {})}
+                        >
+                          Save
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
+
+                {adminMode && (
+                  <div className="mb-4 px-3 py-2 bg-accent-muted border border-accent/20 rounded-lg">
+                    <p className="text-xs text-accent font-mono">
+                      Admin mode — click any level to edit values, percentages, and linked publications
+                    </p>
+                  </div>
+                )}
 
                 {/* Funnel Visualization */}
                 <FunnelVisualization
                   funnel={activeFunnel}
                   onLevelClick={(level) => setActiveLevelModal(level)}
+                  adminMode={adminMode}
                 />
 
                 <p className="text-center text-xs text-muted-foreground mt-3">
-                  Click any level to view linked publications and edit values
+                  {adminMode
+                    ? 'Click any level to edit values and linked publications'
+                    : 'Click any level to view linked publications and data'}
                 </p>
               </div>
             )}
@@ -289,17 +320,19 @@ export default function PatientFunnelsPage() {
                             >
                               Open <ChevronRight className="w-3 h-3" />
                             </button>
-                            <button
-                              onClick={() => {
-                                if (confirm('Delete this funnel?')) {
-                                  if (activeFunnelId === funnel.id) setActiveFunnel(null);
-                                  deleteFunnel(funnel.id);
-                                }
-                              }}
-                              className="text-muted-foreground hover:text-exclude transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canEdit && adminMode && (
+                              <button
+                                onClick={() => {
+                                  if (confirm('Delete this funnel?')) {
+                                    if (activeFunnelId === funnel.id) setActiveFunnel(null);
+                                    deleteFunnel(funnel.id);
+                                  }
+                                }}
+                                className="text-muted-foreground hover:text-exclude transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -399,6 +432,7 @@ export default function PatientFunnelsPage() {
             level={activeLevelModal}
             funnelId={activeFunnel.id}
             open={!!activeLevelModal}
+            adminMode={adminMode}
             onClose={() => setActiveLevelModal(null)}
             onUpdateLevel={(levelId, data) => updateLevel(activeFunnel.id, levelId, data)}
             onUpdateArticle={(levelId, articleId, data) =>

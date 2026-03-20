@@ -12,6 +12,7 @@ interface FunnelLevelModalProps {
   level: FunnelLevel | null;
   funnelId: string;
   open: boolean;
+  adminMode?: boolean;
   onClose: () => void;
   onUpdateLevel: (levelId: string, data: Partial<FunnelLevel>) => void;
   onUpdateArticle: (levelId: string, articleId: string, data: Partial<FunnelArticle>) => void;
@@ -47,6 +48,7 @@ export function FunnelLevelModal({
   level,
   funnelId,
   open,
+  adminMode = false,
   onClose,
   onUpdateLevel,
   onUpdateArticle,
@@ -105,15 +107,22 @@ export function FunnelLevelModal({
               max="100"
               step="0.1"
               value={localPercentage}
-              onChange={(e) => setLocalPercentage(e.target.value)}
+              onChange={(e) => adminMode && setLocalPercentage(e.target.value)}
+              readOnly={!adminMode}
             />
             <Input
               label="Absolute Value (patients)"
               type="number"
               value={localValue}
-              onChange={(e) => setLocalValue(e.target.value)}
+              onChange={(e) => adminMode && setLocalValue(e.target.value)}
+              readOnly={!adminMode}
             />
           </div>
+          {!adminMode && (
+            <p className="text-[11px] text-muted-foreground font-mono -mt-1">
+              Switch to Admin Mode to edit values and manage publications.
+            </p>
+          )}
 
           {/* Articles */}
           <div>
@@ -122,13 +131,15 @@ export function FunnelLevelModal({
                 <BookOpen className="w-3 h-3" />
                 Tagged Publications ({level.linkedArticles.length})
               </p>
-              <button
-                onClick={() => setAddingArticle(true)}
-                className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Publication
-              </button>
+              {adminMode && (
+                <button
+                  onClick={() => setAddingArticle(true)}
+                  className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Publication
+                </button>
+              )}
             </div>
 
             {addingArticle && (
@@ -210,38 +221,46 @@ export function FunnelLevelModal({
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => onRemoveArticle(level.id, article.articleId)}
-                        className="text-muted-foreground hover:text-exclude transition-colors shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {adminMode && (
+                        <button
+                          onClick={() => onRemoveArticle(level.id, article.articleId)}
+                          className="text-muted-foreground hover:text-exclude transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
 
                     <div className="mt-2 flex items-center gap-3 pl-6">
                       <StarRating
                         rating={article.rating}
-                        onChange={(r) => onUpdateArticle(level.id, article.articleId, { rating: r })}
+                        onChange={(r) =>
+                          adminMode && onUpdateArticle(level.id, article.articleId, { rating: r })
+                        }
                       />
                       <input
                         type="number"
                         value={article.appliedValue || ''}
+                        readOnly={!adminMode}
                         onChange={(e) =>
+                          adminMode &&
                           onUpdateArticle(level.id, article.articleId, {
                             appliedValue: parseFloat(e.target.value) || undefined,
                           })
                         }
-                        placeholder="Applied value %"
-                        className="w-28 h-6 px-2 text-xs bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                        placeholder={adminMode ? 'Applied value %' : '—'}
+                        className="w-28 h-6 px-2 text-xs bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-accent read-only:opacity-60 read-only:cursor-default"
                       />
                       <input
                         type="text"
                         value={article.comment || ''}
+                        readOnly={!adminMode}
                         onChange={(e) =>
+                          adminMode &&
                           onUpdateArticle(level.id, article.articleId, { comment: e.target.value })
                         }
-                        placeholder="Comment..."
-                        className="flex-1 h-6 px-2 text-xs bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-accent"
+                        placeholder={adminMode ? 'Comment...' : ''}
+                        className="flex-1 h-6 px-2 text-xs bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-accent read-only:opacity-60 read-only:cursor-default"
                       />
                     </div>
                   </div>
@@ -254,9 +273,11 @@ export function FunnelLevelModal({
             <Button variant="ghost" size="sm" onClick={onClose}>
               Close
             </Button>
-            <Button variant="primary" size="sm" onClick={() => { handleSaveMeta(); onClose(); }}>
-              Save Changes
-            </Button>
+            {adminMode && (
+              <Button variant="primary" size="sm" onClick={() => { handleSaveMeta(); onClose(); }}>
+                Save Changes
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

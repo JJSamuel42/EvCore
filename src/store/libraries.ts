@@ -1,12 +1,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Library, LibraryColumn, LibraryArticle } from '@/types';
+import { Library, LibraryColumn, LibraryArticle, DateQuickAction } from '@/types';
+
+const DEFAULT_QUICK_ACTIONS: DateQuickAction[] = [
+  { id: 'q1', label: 'Last 3 months', type: 'relative_months', months: 3 },
+  { id: 'q2', label: 'Last 6 months', type: 'relative_months', months: 6 },
+  { id: 'q3', label: 'Since last GVD', type: 'since_date', date: undefined },
+];
 
 interface LibraryState {
   libraries: Library[];
   activeLibraryId: string | null;
-  createLibrary: (data: { name: string; innName: string; indication: string; description: string }) => Library;
+  createLibrary: (data: { name: string; innName: string; indications: string[]; description: string }) => Library;
   updateLibrary: (id: string, data: Partial<Library>) => void;
+  updateDateQuickActions: (libraryId: string, actions: DateQuickAction[]) => void;
   deleteLibrary: (id: string) => void;
   addColumn: (libraryId: string, column: Omit<LibraryColumn, 'id' | 'order'>) => void;
   updateColumn: (libraryId: string, columnId: string, data: Partial<LibraryColumn>) => void;
@@ -139,12 +146,13 @@ const INITIAL_LIBRARIES: Library[] = [
     id: 'lib-1',
     name: 'Dupixent',
     innName: 'dupilumab',
-    indication: 'Atopic Dermatitis',
+    indications: ['Atopic Dermatitis', 'Asthma', 'CRSwNP', 'Prurigo Nodularis'],
     description: 'Comprehensive HEOR evidence library for dupilumab (Dupixent) in atopic dermatitis, including efficacy, safety, real-world evidence, and health economics studies.',
     createdAt: '2024-01-10T09:00:00Z',
     updatedAt: '2024-03-15T14:30:00Z',
     articleCount: 9,
     columns: createDefaultColumns(),
+    dateQuickActions: DEFAULT_QUICK_ACTIONS,
     articles: [
       {
         id: 'art-1',
@@ -350,12 +358,13 @@ const INITIAL_LIBRARIES: Library[] = [
     id: 'lib-2',
     name: 'Ozempic',
     innName: 'semaglutide',
-    indication: 'Type 2 Diabetes / Obesity',
+    indications: ['Type 2 Diabetes', 'Obesity', 'Cardiovascular Disease'],
     description: 'HEOR evidence library for semaglutide (Ozempic/Wegovy) across type 2 diabetes and obesity indications, including CVOT outcomes, weight reduction, and economic evidence.',
     createdAt: '2024-02-05T10:00:00Z',
     updatedAt: '2024-03-18T16:00:00Z',
     articleCount: 8,
     columns: createDefaultColumns(),
+    dateQuickActions: DEFAULT_QUICK_ACTIONS,
     articles: [
       {
         id: 'art-s1',
@@ -552,9 +561,20 @@ export const useLibraryStore = create<LibraryState>()(
           articleCount: 0,
           columns: createDefaultColumns(),
           articles: [],
+          dateQuickActions: [...DEFAULT_QUICK_ACTIONS],
         };
         set((state) => ({ libraries: [...state.libraries, newLibrary] }));
         return newLibrary;
+      },
+
+      updateDateQuickActions: (libraryId, actions) => {
+        set((state) => ({
+          libraries: state.libraries.map((lib) =>
+            lib.id === libraryId
+              ? { ...lib, dateQuickActions: actions, updatedAt: new Date().toISOString() }
+              : lib
+          ),
+        }));
       },
 
       updateLibrary: (id, data) => {

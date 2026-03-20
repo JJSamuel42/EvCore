@@ -55,10 +55,15 @@ export default function LibraryPage() {
                     ({library.innName})
                   </span>
                 </div>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-accent px-2 py-0.5 bg-accent-muted rounded border border-accent/10">
-                    {library.indication}
-                  </span>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {library.indications.map((ind) => (
+                    <span
+                      key={ind}
+                      className="text-[11px] font-mono uppercase tracking-wider text-accent px-2 py-0.5 bg-accent-muted rounded border border-accent/10"
+                    >
+                      {ind}
+                    </span>
+                  ))}
                   <span className="text-xs text-muted-foreground">
                     {library.articles.length} articles
                   </span>

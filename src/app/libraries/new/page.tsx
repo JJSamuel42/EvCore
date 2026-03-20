@@ -19,17 +19,30 @@ export default function NewLibraryPage() {
 
   const [name, setName] = useState('');
   const [innName, setInnName] = useState('');
-  const [indication, setIndication] = useState('');
+  const [indications, setIndications] = useState<string[]>([]);
+  const [indicationInput, setIndicationInput] = useState('');
   const [description, setDescription] = useState('');
   const [copyFromId, setCopyFromId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const addIndication = () => {
+    const val = indicationInput.trim();
+    if (val && !indications.includes(val)) {
+      setIndications((p) => [...p, val]);
+      setErrors((p) => ({ ...p, indications: '' }));
+    }
+    setIndicationInput('');
+  };
+
+  const removeIndication = (ind: string) =>
+    setIndications((p) => p.filter((i) => i !== ind));
+
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = 'Brand name is required';
     if (!innName.trim()) errs.innName = 'INN name is required';
-    if (!indication.trim()) errs.indication = 'Indication is required';
+    if (indications.length === 0) errs.indications = 'At least one indication is required';
     return errs;
   };
 
@@ -45,7 +58,7 @@ export default function NewLibraryPage() {
       const library = createLibrary({
         name: name.trim(),
         innName: innName.trim(),
-        indication: indication.trim(),
+        indications,
         description: description.trim(),
       });
       router.push(`/libraries/${library.id}`);
@@ -58,7 +71,7 @@ export default function NewLibraryPage() {
     { value: '', label: 'Do not copy (start fresh)' },
     ...libraries.map((lib) => ({
       value: lib.id,
-      label: `${lib.name} (${lib.innName}) — ${lib.indication}`,
+      label: `${lib.name} (${lib.innName}) — ${(lib.indications ?? []).join(', ')}`,
     })),
   ];
 
@@ -112,17 +125,53 @@ export default function NewLibraryPage() {
                   />
                 </div>
 
-                <Input
-                  label="Indication"
-                  value={indication}
-                  onChange={(e) => {
-                    setIndication(e.target.value);
-                    setErrors((p) => ({ ...p, indication: '' }));
-                  }}
-                  placeholder="e.g. Moderate-to-Severe Atopic Dermatitis"
-                  error={errors.indication}
-                  required
-                />
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    Indications <span className="text-exclude">*</span>
+                  </label>
+                  {indications.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {indications.map((ind) => (
+                        <span
+                          key={ind}
+                          className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-wider text-accent px-2 py-0.5 bg-accent-muted rounded border border-accent/10"
+                        >
+                          {ind}
+                          <button
+                            type="button"
+                            onClick={() => removeIndication(ind)}
+                            className="text-accent/60 hover:text-exclude transition-colors ml-0.5"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={indicationInput}
+                      onChange={(e) => setIndicationInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); addIndication(); }
+                      }}
+                      placeholder="e.g. Atopic Dermatitis — press Enter to add"
+                      className="flex-1 h-9 px-3 text-sm bg-card border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent text-foreground placeholder:text-muted-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={addIndication}
+                      disabled={!indicationInput.trim()}
+                      className="h-9 px-3 text-xs text-accent border border-accent/30 rounded hover:bg-accent-muted transition-colors disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {errors.indications && (
+                    <p className="text-xs text-exclude mt-1">{errors.indications}</p>
+                  )}
+                </div>
 
                 <Textarea
                   label="Description (Optional)"

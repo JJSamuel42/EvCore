@@ -27,6 +27,15 @@ export interface LibraryColumn {
   aiPrompt: string;
   order: number;
   isDefault?: boolean;
+  hidden?: boolean;
+}
+
+export interface DateQuickAction {
+  id: string;
+  label: string;
+  type: 'relative_months' | 'since_date';
+  months?: number;
+  date?: string; // ISO date string for 'since_date'
 }
 
 // State interfaces for stores
@@ -89,13 +98,14 @@ export interface Library {
   id: string;
   name: string; // brand name
   innName: string;
-  indication: string;
+  indications: string[];
   description: string;
   createdAt: string;
   updatedAt: string;
   articleCount: number;
   columns: LibraryColumn[];
   articles: LibraryArticle[];
+  dateQuickActions: DateQuickAction[];
 }
 
 // ============================================================

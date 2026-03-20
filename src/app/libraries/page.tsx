@@ -68,10 +68,15 @@ export default function LibrariesPage() {
                           </p>
                         </div>
 
-                        <div className="mt-2 mb-3">
-                          <span className="text-[11px] font-mono uppercase tracking-wider text-accent px-2 py-0.5 bg-accent-muted rounded border border-accent/10">
-                            {library.indication}
-                          </span>
+                        <div className="mt-2 mb-3 flex flex-wrap gap-1">
+                          {library.indications.map((ind) => (
+                            <span
+                              key={ind}
+                              className="text-[11px] font-mono uppercase tracking-wider text-accent px-2 py-0.5 bg-accent-muted rounded border border-accent/10"
+                            >
+                              {ind}
+                            </span>
+                          ))}
                         </div>
 
                         {library.description && (

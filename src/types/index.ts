@@ -31,6 +31,12 @@ export interface LibraryColumn {
   width?: number;
 }
 
+export interface CategoryNode {
+  id: string;
+  category: string;
+  subcategories: string[];
+}
+
 export interface DateQuickAction {
   id: string;
   label: string;
@@ -107,6 +113,7 @@ export interface Library {
   columns: LibraryColumn[];
   articles: LibraryArticle[];
   dateQuickActions: DateQuickAction[];
+  categoryHierarchy: CategoryNode[];
 }
 
 // ============================================================

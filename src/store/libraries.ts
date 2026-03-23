@@ -1,11 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Library, LibraryColumn, LibraryArticle, DateQuickAction } from '@/types';
+import { Library, LibraryColumn, LibraryArticle, DateQuickAction, CategoryNode } from '@/types';
 
 const DEFAULT_QUICK_ACTIONS: DateQuickAction[] = [
   { id: 'q1', label: 'Last 3 months', type: 'relative_months', months: 3 },
   { id: 'q2', label: 'Last 6 months', type: 'relative_months', months: 6 },
   { id: 'q3', label: 'Since last GVD', type: 'since_date', date: undefined },
+];
+
+export const DEFAULT_CATEGORY_HIERARCHY: CategoryNode[] = [
+  { id: 'cat-1', category: 'Disease Burden – Clinical',       subcategories: ['Epidemiology', 'Morbidity / mortality'] },
+  { id: 'cat-2', category: 'Disease Burden – Humanistic',     subcategories: ['Caregiver impact', 'Patient insight', 'PROs'] },
+  { id: 'cat-3', category: 'Disease Burden – Socioeconomic',  subcategories: ['Direct costs', 'Indirect costs', 'Health resource utilisation', 'Caregiver impact', 'Productivity impact', 'Societal burden'] },
+  { id: 'cat-4', category: 'Management',                      subcategories: ['Guidelines / recommendations', 'Treatment patterns', 'HTA reports'] },
+  { id: 'cat-5', category: 'Product specific',                subcategories: ['Mechanism of action', 'Dosing / utilisation', 'Regulatory', 'Pivotal study'] },
+  { id: 'cat-6', category: 'Efficacy / effectiveness',        subcategories: ['Clinical efficacy / effectiveness', 'Comparative effectiveness', 'Clinical assessment outcomes'] },
+  { id: 'cat-7', category: 'Safety',                          subcategories: ['Safety – General', 'Safety – Specific'] },
+  { id: 'cat-8', category: 'Economic value',                  subcategories: ['Budget impact', 'Cost effectiveness', 'HCRU / Cost of care'] },
 ];
 
 interface LibraryState {
@@ -14,6 +25,7 @@ interface LibraryState {
   createLibrary: (data: { name: string; innName: string; indications: string[]; description: string }) => Library;
   updateLibrary: (id: string, data: Partial<Library>) => void;
   updateDateQuickActions: (libraryId: string, actions: DateQuickAction[]) => void;
+  updateCategoryHierarchy: (libraryId: string, hierarchy: CategoryNode[]) => void;
   deleteLibrary: (id: string) => void;
   addColumn: (libraryId: string, column: Omit<LibraryColumn, 'id' | 'order'>) => void;
   updateColumn: (libraryId: string, columnId: string, data: Partial<LibraryColumn>) => void;
@@ -43,18 +55,9 @@ const DEFAULT_COLUMNS: Omit<LibraryColumn, 'id' | 'order'>[] = [
   },
   {
     name: 'Category',
-    description: 'Broad study category',
+    description: 'Broad study category (use the hierarchical category picker to filter)',
     type: 'select',
-    predefinedValues: [
-      'Disease Burden – Clinical',
-      'Disease Burden – Humanistic',
-      'Disease Burden – Socioeconomic',
-      'Management',
-      'Product specific',
-      'Efficacy / effectiveness',
-      'Safety',
-      'Economic value',
-    ],
+    predefinedValues: DEFAULT_CATEGORY_HIERARCHY.map((n) => n.category),
     isFilter: true,
     aiPrompt: 'Classify this article into one of the following categories: Disease Burden – Clinical, Disease Burden – Humanistic, Disease Burden – Socioeconomic, Management, Product specific, Efficacy / effectiveness, Safety, Economic value.',
     isDefault: true,
@@ -63,16 +66,7 @@ const DEFAULT_COLUMNS: Omit<LibraryColumn, 'id' | 'order'>[] = [
     name: 'Subcategory',
     description: 'Specific study subcategory within the selected category',
     type: 'select',
-    predefinedValues: [
-      'Epidemiology', 'Morbidity / mortality',
-      'Caregiver impact', 'Patient insight', 'PROs',
-      'Direct costs', 'Indirect costs', 'Health resource utilisation', 'Productivity impact', 'Societal burden',
-      'Guidelines / recommendations', 'Treatment patterns', 'HTA reports',
-      'Mechanism of action', 'Dosing / utilisation', 'Regulatory', 'Pivotal study',
-      'Clinical efficacy / effectiveness', 'Comparative effectiveness', 'Clinical assessment outcomes',
-      'Safety – General', 'Safety – Specific',
-      'Budget impact', 'Cost effectiveness', 'HCRU / Cost of care',
-    ],
+    predefinedValues: DEFAULT_CATEGORY_HIERARCHY.flatMap((n) => n.subcategories),
     isFilter: true,
     aiPrompt: 'Classify this article subcategory. Options include: Epidemiology, Morbidity / mortality, Caregiver impact, Patient insight, PROs, Direct costs, Indirect costs, Health resource utilisation, Productivity impact, Societal burden, Guidelines / recommendations, Treatment patterns, HTA reports, Mechanism of action, Dosing / utilisation, Regulatory, Pivotal study, Clinical efficacy / effectiveness, Comparative effectiveness, Clinical assessment outcomes, Safety – General, Safety – Specific, Budget impact, Cost effectiveness, HCRU / Cost of care.',
     isDefault: true,
@@ -171,6 +165,7 @@ const INITIAL_LIBRARIES: Library[] = [
     articleCount: 9,
     columns: createDefaultColumns(),
     dateQuickActions: DEFAULT_QUICK_ACTIONS,
+    categoryHierarchy: DEFAULT_CATEGORY_HIERARCHY.map((n) => ({ ...n })),
     articles: [
       {
         id: 'art-1',
@@ -183,8 +178,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/28892958',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Efficacy',
-        'col-default-3': 'RCT',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Clinical efficacy / effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Randomized Controlled Trial',
         'col-default-6': 'Multi-Regional',
@@ -205,8 +200,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/34516098',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Efficacy',
-        'col-default-3': 'Meta-Analysis',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Comparative effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Modeling Study',
         'col-default-6': 'Multi-Regional',
@@ -227,8 +222,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35879812',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Real World Evidence',
-        'col-default-3': 'Systematic Review',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Comparative effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Systematic Review',
         'col-default-6': 'Europe',
@@ -249,8 +244,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/31893385',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Health Economics',
-        'col-default-3': 'Budget Impact',
+        'col-default-2': 'Economic value',
+        'col-default-3': 'Cost effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Modeling Study',
         'col-default-6': 'Europe',
@@ -271,8 +266,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/33852137',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'QoL',
-        'col-default-3': 'RCT',
+        'col-default-2': 'Disease Burden – Humanistic',
+        'col-default-3': 'PROs',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Randomized Controlled Trial',
         'col-default-6': 'Multi-Regional',
@@ -294,7 +289,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
         'col-default-2': 'Safety',
-        'col-default-3': 'Meta-Analysis',
+        'col-default-3': 'Safety – General',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Modeling Study',
         'col-default-6': 'Multi-Regional',
@@ -315,8 +310,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/34623382',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Health Economics',
-        'col-default-3': 'Budget Impact',
+        'col-default-2': 'Economic value',
+        'col-default-3': 'Budget impact',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Modeling Study',
         'col-default-6': 'North America',
@@ -337,8 +332,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/36193423',
         'col-default-0': 'Not Applicable',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Epidemiology',
-        'col-default-3': 'Observational',
+        'col-default-2': 'Disease Burden – Clinical',
+        'col-default-3': 'Epidemiology',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Cross-Sectional',
         'col-default-6': 'North America',
@@ -359,8 +354,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35445695',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Efficacy',
-        'col-default-3': 'Observational',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Comparative effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Cohort Study',
         'col-default-6': 'North America',
@@ -383,6 +378,7 @@ const INITIAL_LIBRARIES: Library[] = [
     articleCount: 8,
     columns: createDefaultColumns(),
     dateQuickActions: DEFAULT_QUICK_ACTIONS,
+    categoryHierarchy: DEFAULT_CATEGORY_HIERARCHY.map((n) => ({ ...n })),
     articles: [
       {
         id: 'art-s1',
@@ -395,8 +391,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/29634964',
         'col-default-0': 'Semaglutide',
         'col-default-1': 'Type 2 Diabetes',
-        'col-default-2': 'Efficacy',
-        'col-default-3': 'RCT',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Clinical efficacy / effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Randomized Controlled Trial',
         'col-default-6': 'Multi-Regional',
@@ -417,8 +413,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/34633860',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity',
-        'col-default-2': 'Efficacy',
-        'col-default-3': 'RCT',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Clinical efficacy / effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Randomized Controlled Trial',
         'col-default-6': 'Multi-Regional',
@@ -439,8 +435,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/36622835',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity',
-        'col-default-2': 'Health Economics',
-        'col-default-3': 'Budget Impact',
+        'col-default-2': 'Economic value',
+        'col-default-3': 'Cost effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Modeling Study',
         'col-default-6': 'North America',
@@ -461,8 +457,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35499086',
         'col-default-0': 'Semaglutide',
         'col-default-1': 'Type 2 Diabetes',
-        'col-default-2': 'Real World Evidence',
-        'col-default-3': 'Observational',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Comparative effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Cohort Study',
         'col-default-6': 'Europe',
@@ -483,8 +479,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/37285075',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity',
-        'col-default-2': 'QoL',
-        'col-default-3': 'Meta-Analysis',
+        'col-default-2': 'Disease Burden – Humanistic',
+        'col-default-3': 'PROs',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Modeling Study',
         'col-default-6': 'Multi-Regional',
@@ -505,8 +501,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/37952189',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity / Cardiovascular Disease',
-        'col-default-2': 'Efficacy',
-        'col-default-3': 'RCT',
+        'col-default-2': 'Efficacy / effectiveness',
+        'col-default-3': 'Clinical efficacy / effectiveness',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Randomized Controlled Trial',
         'col-default-6': 'Multi-Regional',
@@ -527,8 +523,8 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35796025',
         'col-default-0': 'Not Applicable',
         'col-default-1': 'Type 2 Diabetes',
-        'col-default-2': 'Epidemiology',
-        'col-default-3': 'Systematic Review',
+        'col-default-2': 'Disease Burden – Clinical',
+        'col-default-3': 'Epidemiology',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Systematic Review',
         'col-default-6': 'Global',
@@ -550,7 +546,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-0': 'Semaglutide',
         'col-default-1': 'Type 2 Diabetes / Obesity',
         'col-default-2': 'Safety',
-        'col-default-3': 'Meta-Analysis',
+        'col-default-3': 'Safety – General',
         'col-default-4': 'Journal Article',
         'col-default-5': 'Modeling Study',
         'col-default-6': 'Multi-Regional',
@@ -580,6 +576,7 @@ export const useLibraryStore = create<LibraryState>()(
           columns: createDefaultColumns(),
           articles: [],
           dateQuickActions: [...DEFAULT_QUICK_ACTIONS],
+          categoryHierarchy: DEFAULT_CATEGORY_HIERARCHY.map((n) => ({ ...n })),
         };
         set((state) => ({ libraries: [...state.libraries, newLibrary] }));
         return newLibrary;
@@ -590,6 +587,16 @@ export const useLibraryStore = create<LibraryState>()(
           libraries: state.libraries.map((lib) =>
             lib.id === libraryId
               ? { ...lib, dateQuickActions: actions, updatedAt: new Date().toISOString() }
+              : lib
+          ),
+        }));
+      },
+
+      updateCategoryHierarchy: (libraryId, hierarchy) => {
+        set((state) => ({
+          libraries: state.libraries.map((lib) =>
+            lib.id === libraryId
+              ? { ...lib, categoryHierarchy: hierarchy, updatedAt: new Date().toISOString() }
               : lib
           ),
         }));

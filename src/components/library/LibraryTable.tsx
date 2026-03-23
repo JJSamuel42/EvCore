@@ -20,7 +20,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { Library, LibraryArticle, LibraryColumn, SortState, DateQuickAction } from '@/types';
+import { Library, LibraryArticle, LibraryColumn, SortState, DateQuickAction, CategoryNode } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ColumnEditor } from './ColumnEditor';
@@ -45,17 +45,6 @@ const SYSTEM_COLS = [
   { id: 'publicationDate', name: 'Date' },
 ];
 
-const CATEGORY_SUBCATEGORY_MAP: Record<string, string[]> = {
-  'Disease Burden – Clinical': ['Epidemiology', 'Morbidity / mortality'],
-  'Disease Burden – Humanistic': ['Caregiver impact', 'Patient insight', 'PROs'],
-  'Disease Burden – Socioeconomic': ['Direct costs', 'Indirect costs', 'Health resource utilisation', 'Productivity impact', 'Societal burden'],
-  'Management': ['Guidelines / recommendations', 'Treatment patterns', 'HTA reports'],
-  'Product specific': ['Mechanism of action', 'Dosing / utilisation', 'Regulatory', 'Pivotal study'],
-  'Efficacy / effectiveness': ['Clinical efficacy / effectiveness', 'Comparative effectiveness', 'Clinical assessment outcomes'],
-  'Safety': ['Safety – General', 'Safety – Specific'],
-  'Economic value': ['Budget impact', 'Cost effectiveness', 'HCRU / Cost of care'],
-};
-
 function getDateFromQuickAction(action: DateQuickAction): { from: string; to: string } {
   if (action.type === 'relative_months' && action.months) {
     const d = new Date();
@@ -69,7 +58,7 @@ function getDateFromQuickAction(action: DateQuickAction): { from: string; to: st
 }
 
 export function LibraryTable({ library }: LibraryTableProps) {
-  const { updateColumn, deleteColumn, addColumn, updateArticle, updateDateQuickActions } = useLibraryStore();
+  const { updateColumn, deleteColumn, addColumn, updateArticle, updateDateQuickActions, updateCategoryHierarchy } = useLibraryStore();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'researcher';
 
@@ -77,9 +66,12 @@ export function LibraryTable({ library }: LibraryTableProps) {
   const [adminMode, setAdminMode] = useState(false);
   const [showColumnPanel, setShowColumnPanel] = useState(false);
   const [editingQuickActions, setEditingQuickActions] = useState(false);
+  const [editingCategoryHierarchy, setEditingCategoryHierarchy] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [processingCol, setProcessingCol] = useState<string | null>(null);
   const [expandedAbstract, setExpandedAbstract] = useState<string | null>(null);
   const columnPanelRef = useRef<HTMLDivElement>(null);
+  const categoryPickerRef = useRef<HTMLDivElement>(null);
 
   // ── Column visibility & order ────────────────────────────────────────
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
@@ -109,6 +101,62 @@ export function LibraryTable({ library }: LibraryTableProps) {
     if (showColumnPanel) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showColumnPanel]);
+
+  // Close category picker on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (categoryPickerRef.current && !categoryPickerRef.current.contains(e.target as Node)) {
+        setShowCategoryPicker(false);
+      }
+    }
+    if (showCategoryPicker) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showCategoryPicker]);
+
+  // ── Category hierarchy editing ────────────────────────────────────────
+  const [localHierarchy, setLocalHierarchy] = useState<CategoryNode[]>(() => library.categoryHierarchy);
+  useEffect(() => setLocalHierarchy(library.categoryHierarchy), [library.categoryHierarchy]);
+
+  const saveHierarchy = () => {
+    updateCategoryHierarchy(library.id, localHierarchy);
+    setEditingCategoryHierarchy(false);
+  };
+
+  const addCategoryNode = () => {
+    setLocalHierarchy((prev) => [
+      ...prev,
+      { id: `cat-${Date.now()}`, category: 'New Category', subcategories: [] },
+    ]);
+  };
+
+  const updateCategoryNode = (id: string, patch: Partial<CategoryNode>) =>
+    setLocalHierarchy((prev) => prev.map((n) => (n.id === id ? { ...n, ...patch } : n)));
+
+  const removeCategoryNode = (id: string) =>
+    setLocalHierarchy((prev) => prev.filter((n) => n.id !== id));
+
+  const addSubcategory = (nodeId: string) =>
+    setLocalHierarchy((prev) =>
+      prev.map((n) => (n.id === nodeId ? { ...n, subcategories: [...n.subcategories, 'New subcategory'] } : n))
+    );
+
+  const updateSubcategory = (nodeId: string, idx: number, value: string) =>
+    setLocalHierarchy((prev) =>
+      prev.map((n) => {
+        if (n.id !== nodeId) return n;
+        const subs = [...n.subcategories];
+        subs[idx] = value;
+        return { ...n, subcategories: subs };
+      })
+    );
+
+  const removeSubcategory = (nodeId: string, idx: number) =>
+    setLocalHierarchy((prev) =>
+      prev.map((n) => {
+        if (n.id !== nodeId) return n;
+        return { ...n, subcategories: n.subcategories.filter((_, i) => i !== idx) };
+      })
+    );
 
   const orderedVisibleLibraryCols = useMemo(
     () =>
@@ -173,6 +221,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
   const [productFilter, setProductFilter] = useState('');
   const [indicationFilter, setIndicationFilter] = useState('');
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [categorySelection, setCategorySelection] = useState(''); // category or subcategory name
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [activeQuickId, setActiveQuickId] = useState<string | null>(null);
@@ -184,13 +233,18 @@ export function LibraryTable({ library }: LibraryTableProps) {
     setProductFilter('');
     setIndicationFilter('');
     setColFilters({});
+    setCategorySelection('');
     setDateFrom('');
     setDateTo('');
     setActiveQuickId(null);
   };
 
   const hasActiveFilters =
-    productFilter || indicationFilter || Object.values(colFilters).some(Boolean) || dateFrom || dateTo;
+    productFilter || indicationFilter || Object.values(colFilters).some(Boolean) || categorySelection || dateFrom || dateTo;
+
+  // Derive whether categorySelection is a parent category or a subcategory
+  const categoryHierarchy = library.categoryHierarchy;
+  const categorySelectionIsParent = categoryHierarchy.some((n) => n.category === categorySelection);
 
   const applyQuickDate = (action: DateQuickAction) => {
     if (activeQuickId === action.id) {
@@ -283,8 +337,21 @@ export function LibraryTable({ library }: LibraryTableProps) {
         String(a[indicationCol.id] ?? '').toLowerCase().includes(indicationFilter.toLowerCase())
       );
     }
+    // Hierarchical category filter
+    if (categorySelection && categoryCol && subCategoryCol) {
+      if (categorySelectionIsParent) {
+        // Filter by category column
+        arts = arts.filter((a) => String(a[categoryCol.id] ?? '') === categorySelection);
+      } else {
+        // Filter by subcategory column
+        arts = arts.filter((a) => String(a[subCategoryCol.id] ?? '') === categorySelection);
+      }
+    }
+    // Other column filters (skip category/subcategory cols handled above)
     Object.entries(colFilters).forEach(([colId, val]) => {
       if (!val) return;
+      if (categoryCol && colId === categoryCol.id) return;
+      if (subCategoryCol && colId === subCategoryCol.id) return;
       arts = arts.filter((a) => String(a[colId] ?? '') === val);
     });
     if (dateFrom) arts = arts.filter((a) => a.publicationDate >= dateFrom);
@@ -299,7 +366,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
       });
     }
     return arts;
-  }, [library.articles, productFilter, indicationFilter, colFilters, dateFrom, dateTo, sort, productCol, indicationCol]);
+  }, [library.articles, productFilter, indicationFilter, colFilters, categorySelection, categorySelectionIsParent, dateFrom, dateTo, sort, productCol, indicationCol, categoryCol, subCategoryCol]);
 
   const totalPages = Math.ceil(filteredArticles.length / PAGE_SIZE);
   const pageArticles = filteredArticles.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -485,25 +552,81 @@ export function LibraryTable({ library }: LibraryTableProps) {
         {indicationCol && filterSelect(
           'All Indications', indicationFilter, setIndicationFilter, indicationValues
         )}
-        {categoryCol?.predefinedValues && filterSelect(
-          'Category', colFilters[categoryCol.id] || '', (v) => {
-            setColFilter(categoryCol.id, v);
-            // Reset subcategory when category changes
-            if (subCategoryCol) setColFilter(subCategoryCol.id, '');
-          }, categoryCol.predefinedValues
-        )}
-        {subCategoryCol?.predefinedValues && (() => {
-          const selectedCategory = categoryCol ? colFilters[categoryCol.id] : '';
-          const subcatOptions = selectedCategory && CATEGORY_SUBCATEGORY_MAP[selectedCategory]
-            ? CATEGORY_SUBCATEGORY_MAP[selectedCategory]
-            : subCategoryCol.predefinedValues!;
-          return filterSelect(
-            'Sub Category',
-            colFilters[subCategoryCol.id] || '',
-            (v) => setColFilter(subCategoryCol.id, v),
-            subcatOptions
-          );
-        })()}
+
+        {/* ── Hierarchical Category Picker ──────────────────────────── */}
+        <div className="relative" ref={categoryPickerRef}>
+          <button
+            onClick={() => setShowCategoryPicker((p) => !p)}
+            className={cn(
+              'h-7 px-2.5 text-xs rounded border flex items-center gap-1.5 transition-colors',
+              categorySelection
+                ? 'border-accent/50 text-accent bg-accent-muted'
+                : 'border-border text-muted-foreground bg-card hover:border-accent/30'
+            )}
+          >
+            <span>{categorySelection || 'Category'}</span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {showCategoryPicker && (
+            <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg w-64 max-h-80 overflow-y-auto">
+              {/* Clear option */}
+              {categorySelection && (
+                <button
+                  onClick={() => { setCategorySelection(''); setShowCategoryPicker(false); }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-exclude hover:bg-exclude-bg transition-colors border-b border-border flex items-center gap-1.5"
+                >
+                  <X className="w-3 h-3" />
+                  Clear filter
+                </button>
+              )}
+              {categoryHierarchy.map((node) => (
+                <div key={node.id}>
+                  {/* Parent category row */}
+                  <button
+                    onClick={() => { setCategorySelection(node.category); setShowCategoryPicker(false); }}
+                    className={cn(
+                      'w-full text-left px-3 py-1.5 text-xs font-medium transition-colors',
+                      categorySelection === node.category
+                        ? 'bg-accent-muted text-accent'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    {node.category}
+                  </button>
+                  {/* Child subcategory rows */}
+                  {node.subcategories.map((sub) => (
+                    <button
+                      key={sub}
+                      onClick={() => { setCategorySelection(sub); setShowCategoryPicker(false); }}
+                      className={cn(
+                        'w-full text-left pl-7 pr-3 py-1 text-xs transition-colors',
+                        categorySelection === sub
+                          ? 'bg-accent-muted text-accent'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              ))}
+              {/* Admin: edit hierarchy link */}
+              {isAdmin && adminMode && (
+                <div className="border-t border-border px-3 py-1.5">
+                  <button
+                    onClick={() => { setShowCategoryPicker(false); setEditingCategoryHierarchy(true); }}
+                    className="text-xs text-accent hover:underline flex items-center gap-1"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    Edit categories…
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {pubTypeCol?.predefinedValues && filterSelect(
           'Publication Type', colFilters[pubTypeCol.id] || '', (v) => setColFilter(pubTypeCol.id, v), pubTypeCol.predefinedValues
         )}
@@ -903,6 +1026,83 @@ export function LibraryTable({ library }: LibraryTableProps) {
             </DialogClose>
             <Button variant="primary" size="sm" onClick={saveQuickActions}>
               Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Category Hierarchy Edit Dialog (Admin only) ──────────────── */}
+      <Dialog open={editingCategoryHierarchy} onOpenChange={setEditingCategoryHierarchy}>
+        <DialogContent
+          title="Edit Category Hierarchy"
+          description="Add, rename, or remove categories and their subcategories. Changes apply to this library's filter picker."
+          size="md"
+        >
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {localHierarchy.map((node) => (
+              <div key={node.id} className="border border-border rounded-lg p-3 space-y-2">
+                {/* Category name row */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={node.category}
+                    onChange={(e) => updateCategoryNode(node.id, { category: e.target.value })}
+                    className="flex-1 h-8 px-2 text-xs font-medium bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
+                  />
+                  <button
+                    onClick={() => removeCategoryNode(node.id)}
+                    className="p-1 text-muted-foreground hover:text-exclude transition-colors shrink-0"
+                    title="Remove category"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Subcategories */}
+                <div className="space-y-1 pl-3 border-l-2 border-border">
+                  {node.subcategories.map((sub, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={sub}
+                        onChange={(e) => updateSubcategory(node.id, idx, e.target.value)}
+                        className="flex-1 h-7 px-2 text-xs bg-card border border-border rounded focus:outline-none focus:ring-1 focus:ring-accent text-foreground"
+                      />
+                      <button
+                        onClick={() => removeSubcategory(node.id, idx)}
+                        className="p-1 text-muted-foreground hover:text-exclude transition-colors shrink-0"
+                        title="Remove subcategory"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => addSubcategory(node.id)}
+                    className="text-[11px] text-accent hover:underline flex items-center gap-1 mt-0.5"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add subcategory
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            <button
+              onClick={addCategoryNode}
+              className="w-full py-2 border border-dashed border-border rounded-lg text-xs text-muted-foreground hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add category
+            </button>
+          </div>
+
+          <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+            <DialogClose asChild>
+              <Button variant="ghost" size="sm">Cancel</Button>
+            </DialogClose>
+            <Button variant="primary" size="sm" onClick={saveHierarchy}>
+              Save Changes
             </Button>
           </div>
         </DialogContent>

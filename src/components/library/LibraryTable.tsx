@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Settings2,
   Plus,
@@ -44,6 +44,17 @@ const SYSTEM_COLS = [
   { id: 'journal', name: 'Journal' },
   { id: 'publicationDate', name: 'Date' },
 ];
+
+const CATEGORY_SUBCATEGORY_MAP: Record<string, string[]> = {
+  'Disease Burden – Clinical': ['Epidemiology', 'Morbidity / mortality'],
+  'Disease Burden – Humanistic': ['Caregiver impact', 'Patient insight', 'PROs'],
+  'Disease Burden – Socioeconomic': ['Direct costs', 'Indirect costs', 'Health resource utilisation', 'Productivity impact', 'Societal burden'],
+  'Management': ['Guidelines / recommendations', 'Treatment patterns', 'HTA reports'],
+  'Product specific': ['Mechanism of action', 'Dosing / utilisation', 'Regulatory', 'Pivotal study'],
+  'Efficacy / effectiveness': ['Clinical efficacy / effectiveness', 'Comparative effectiveness', 'Clinical assessment outcomes'],
+  'Safety': ['Safety – General', 'Safety – Specific'],
+  'Economic value': ['Budget impact', 'Cost effectiveness', 'HCRU / Cost of care'],
+};
 
 function getDateFromQuickAction(action: DateQuickAction): { from: string; to: string } {
   if (action.type === 'relative_months' && action.months) {
@@ -124,6 +135,30 @@ export function LibraryTable({ library }: LibraryTableProps) {
       return next;
     });
   };
+
+  // ── Column resize ─────────────────────────────────────────────────────
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const resizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent, colId: string) => {
+    e.preventDefault();
+    const th = (e.target as HTMLElement).closest('th') as HTMLTableCellElement;
+    resizeRef.current = { colId, startX: e.clientX, startWidth: th.offsetWidth };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const delta = ev.clientX - resizeRef.current.startX;
+      const newWidth = Math.max(60, resizeRef.current.startWidth + delta);
+      setColWidths((prev) => ({ ...prev, [resizeRef.current!.colId]: newWidth }));
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
 
   // ── Named filter columns ─────────────────────────────────────────────
   const productCol = library.columns.find((c) => c.name === 'Product');
@@ -451,11 +486,24 @@ export function LibraryTable({ library }: LibraryTableProps) {
           'All Indications', indicationFilter, setIndicationFilter, indicationValues
         )}
         {categoryCol?.predefinedValues && filterSelect(
-          'Category', colFilters[categoryCol.id] || '', (v) => setColFilter(categoryCol.id, v), categoryCol.predefinedValues
+          'Category', colFilters[categoryCol.id] || '', (v) => {
+            setColFilter(categoryCol.id, v);
+            // Reset subcategory when category changes
+            if (subCategoryCol) setColFilter(subCategoryCol.id, '');
+          }, categoryCol.predefinedValues
         )}
-        {subCategoryCol?.predefinedValues && filterSelect(
-          'Sub Category', colFilters[subCategoryCol.id] || '', (v) => setColFilter(subCategoryCol.id, v), subCategoryCol.predefinedValues
-        )}
+        {subCategoryCol?.predefinedValues && (() => {
+          const selectedCategory = categoryCol ? colFilters[categoryCol.id] : '';
+          const subcatOptions = selectedCategory && CATEGORY_SUBCATEGORY_MAP[selectedCategory]
+            ? CATEGORY_SUBCATEGORY_MAP[selectedCategory]
+            : subCategoryCol.predefinedValues!;
+          return filterSelect(
+            'Sub Category',
+            colFilters[subCategoryCol.id] || '',
+            (v) => setColFilter(subCategoryCol.id, v),
+            subcatOptions
+          );
+        })()}
         {pubTypeCol?.predefinedValues && filterSelect(
           'Publication Type', colFilters[pubTypeCol.id] || '', (v) => setColFilter(pubTypeCol.id, v), pubTypeCol.predefinedValues
         )}
@@ -553,34 +601,44 @@ export function LibraryTable({ library }: LibraryTableProps) {
                 />
               </th>
               {!hiddenCols.has('articleNumber') && (
-                <th className="w-10 cursor-pointer" onClick={() => handleSort('articleNumber')}>
+                <th className="w-10 cursor-pointer relative" style={colWidths['articleNumber'] ? { width: colWidths['articleNumber'] } : undefined} onClick={() => handleSort('articleNumber')}>
                   <div className="flex items-center gap-1">#<SortIcon colId="articleNumber" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'articleNumber')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('pmid') && (
-                <th className="w-24 cursor-pointer" onClick={() => handleSort('pmid')}>
+                <th className="w-24 cursor-pointer relative" style={colWidths['pmid'] ? { width: colWidths['pmid'] } : undefined} onClick={() => handleSort('pmid')}>
                   <div className="flex items-center gap-1">Article ID<SortIcon colId="pmid" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'pmid')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('title') && (
-                <th className="min-w-[200px] cursor-pointer" onClick={() => handleSort('title')}>
+                <th className="min-w-[200px] cursor-pointer relative" style={colWidths['title'] ? { width: colWidths['title'] } : undefined} onClick={() => handleSort('title')}>
                   <div className="flex items-center gap-1">Title<SortIcon colId="title" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'title')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
-              {!hiddenCols.has('authors') && <th className="min-w-[120px]">Authors</th>}
+              {!hiddenCols.has('authors') && (
+                <th className="min-w-[120px] relative" style={colWidths['authors'] ? { width: colWidths['authors'] } : undefined}>
+                  Authors
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'authors')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
+                </th>
+              )}
               {!hiddenCols.has('journal') && (
-                <th className="min-w-[120px] cursor-pointer" onClick={() => handleSort('journal')}>
+                <th className="min-w-[120px] cursor-pointer relative" style={colWidths['journal'] ? { width: colWidths['journal'] } : undefined} onClick={() => handleSort('journal')}>
                   <div className="flex items-center gap-1">Journal<SortIcon colId="journal" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'journal')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('publicationDate') && (
-                <th className="min-w-[90px] cursor-pointer" onClick={() => handleSort('publicationDate')}>
+                <th className="min-w-[90px] cursor-pointer relative" style={colWidths['publicationDate'] ? { width: colWidths['publicationDate'] } : undefined} onClick={() => handleSort('publicationDate')}>
                   <div className="flex items-center gap-1">Date<SortIcon colId="publicationDate" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'publicationDate')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
 
               {orderedVisibleLibraryCols.map((col) => (
-                <th key={col.id} className="min-w-[100px]">
+                <th key={col.id} className="min-w-[100px] relative" style={colWidths[col.id] ? { width: colWidths[col.id] } : undefined}>
                   {adminMode ? (
                     <ColumnEditor
                       column={col}
@@ -610,6 +668,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
                       Process
                     </button>
                   )}
+                  <div onMouseDown={(e) => onResizeMouseDown(e, col.id)} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               ))}
 
@@ -699,12 +758,12 @@ export function LibraryTable({ library }: LibraryTableProps) {
                   )}
                   {!hiddenCols.has('authors') && (
                     <td>
-                      <p className="text-xs text-muted-foreground">{truncate(article.authors, 40)}</p>
+                      <p className="text-xs text-muted-foreground" title={article.authors}>{truncate(article.authors, 40)}</p>
                     </td>
                   )}
                   {!hiddenCols.has('journal') && (
                     <td>
-                      <p className="text-xs text-foreground italic">{truncate(article.journal, 30)}</p>
+                      <p className="text-xs text-foreground italic" title={article.journal}>{truncate(article.journal, 30)}</p>
                     </td>
                   )}
                   {!hiddenCols.has('publicationDate') && (
@@ -717,6 +776,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
 
                   {orderedVisibleLibraryCols.map((col) => {
                     const val = article[col.id];
+                    const strVal = String(val ?? '');
                     return (
                       <td key={col.id}>
                         {col.type === 'number' ? (
@@ -724,8 +784,8 @@ export function LibraryTable({ library }: LibraryTableProps) {
                         ) : col.type === 'select' && val ? (
                           <Badge variant="neutral" size="sm">{val}</Badge>
                         ) : (
-                          <p className="text-xs text-foreground leading-snug">
-                            {truncate(String(val ?? ''), 60)}
+                          <p className="text-xs text-foreground leading-snug" title={strVal.length > 60 ? strVal : undefined}>
+                            {truncate(strVal, 60)}
                           </p>
                         )}
                       </td>

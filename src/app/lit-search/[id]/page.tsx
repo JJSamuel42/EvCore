@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   BookmarkPlus,
+  Library,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { AppShell } from '@/components/layout/AppShell';
@@ -18,10 +19,12 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Input';
 import { SectionLabel } from '@/components/ui/SectionLabel';
+import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { SearchBuilder } from '@/components/lit-search/SearchBuilder';
 import { AbstractModal } from '@/components/lit-search/AbstractModal';
 import { ReviewModal } from '@/components/lit-search/ReviewModal';
 import { useLitSearchStore } from '@/store/litSearch';
+import { useLibraryStore } from '@/store/libraries';
 import { SearchResult, SearchTerm } from '@/types';
 import { cn, truncate, formatDate } from '@/lib/utils';
 
@@ -37,6 +40,7 @@ export default function LitSearchSessionPage() {
   const { id } = useParams<{ id: string }>();
   const { sessions, addTerm, removeTerm, updateSession, setFilters, updateResult, runSearch, runAIReview } =
     useLitSearchStore();
+  const { libraries, addArticle } = useLibraryStore();
 
   const session = sessions.find((s) => s.id === id);
 
@@ -47,6 +51,9 @@ export default function LitSearchSessionPage() {
   const [activePresets, setActivePresets] = useState<string[]>([]);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [sortCol, setSortCol] = useState<string | null>(null);
+  const [showPushDialog, setShowPushDialog] = useState(false);
+  const [selectedLibraryId, setSelectedLibraryId] = useState<string>('');
+  const [pushDone, setPushDone] = useState(false);
 
   if (!session) {
     return (
@@ -122,6 +129,23 @@ export default function LitSearchSessionPage() {
     ) : (
       <ChevronDown className="w-3 h-3 text-accent" />
     );
+  };
+
+  const includedResults = session.results.filter((r) => r.decision === 'include');
+
+  const handlePushToLibrary = () => {
+    if (!selectedLibraryId) return;
+    includedResults.forEach((r) => {
+      addArticle(selectedLibraryId, {
+        pmid: r.pmid,
+        title: r.title,
+        authors: r.authors,
+        journal: r.journal,
+        publicationDate: r.pubDate,
+        publicationLink: r.link,
+      });
+    });
+    setPushDone(true);
   };
 
   return (
@@ -315,6 +339,7 @@ export default function LitSearchSessionPage() {
                     variant="ghost"
                     leftIcon={<BookmarkPlus className="w-4 h-4" />}
                     className="ml-auto"
+                    onClick={() => { setShowPushDialog(true); setPushDone(false); setSelectedLibraryId(''); }}
                   >
                     Push to Library ({included})
                   </Button>
@@ -354,6 +379,7 @@ export default function LitSearchSessionPage() {
                           </th>
                           <th className="w-16">Link</th>
                           <th className="w-24">PMID</th>
+                          <th className="w-20">Confidence</th>
                           <th className="w-28">Decision</th>
                           <th className="min-w-[180px]">Rationale</th>
                         </tr>
@@ -391,6 +417,25 @@ export default function LitSearchSessionPage() {
                             </td>
                             <td>
                               <span className="text-xs font-mono text-muted-foreground">{result.pmid}</span>
+                            </td>
+                            <td>
+                              {result.confidence != null ? (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-mono text-foreground">{result.confidence}%</span>
+                                  <div className="h-1 w-12 rounded-full bg-border overflow-hidden">
+                                    <div
+                                      className={cn(
+                                        'h-full rounded-full',
+                                        result.confidence >= 85 ? 'bg-include' :
+                                        result.confidence >= 65 ? 'bg-amber-500' : 'bg-exclude'
+                                      )}
+                                      style={{ width: `${result.confidence}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
                             </td>
                             <td>
                               <button
@@ -442,6 +487,71 @@ export default function LitSearchSessionPage() {
             }
           }}
         />
+
+        {/* Push to Library dialog */}
+        <Dialog open={showPushDialog} onOpenChange={setShowPushDialog}>
+          <DialogContent
+            size="sm"
+            title="Push to Library"
+            description={`Push ${includedResults.length} included article${includedResults.length !== 1 ? 's' : ''} to an evidence library.`}
+          >
+            {pushDone ? (
+              <div className="space-y-4">
+                <div className="p-3 bg-include-bg border border-include/30 rounded-md text-sm text-include">
+                  {includedResults.length} article{includedResults.length !== 1 ? 's' : ''} added to library successfully.
+                </div>
+                <div className="flex justify-end">
+                  <Button variant="primary" size="sm" onClick={() => setShowPushDialog(false)}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-2">
+                    Select Library
+                  </p>
+                  <select
+                    value={selectedLibraryId}
+                    onChange={(e) => setSelectedLibraryId(e.target.value)}
+                    className="w-full h-9 px-3 text-sm bg-card border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent text-foreground"
+                  >
+                    <option value="">Choose a library…</option>
+                    {libraries.map((lib) => (
+                      <option key={lib.id} value={lib.id}>
+                        {lib.name} — {lib.innName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="max-h-40 overflow-y-auto space-y-1 border border-border rounded-md p-2">
+                  {includedResults.map((r) => (
+                    <p key={r.pmid} className="text-xs text-foreground truncate" title={r.title}>
+                      {r.title}
+                    </p>
+                  ))}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setShowPushDialog(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Library className="w-3.5 h-3.5" />}
+                    disabled={!selectedLibraryId}
+                    onClick={handlePushToLibrary}
+                  >
+                    Push {includedResults.length} Article{includedResults.length !== 1 ? 's' : ''}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </AppShell>
     </AuthGuard>
   );

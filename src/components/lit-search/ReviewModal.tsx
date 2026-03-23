@@ -56,7 +56,31 @@ export function ReviewModal({ result, open, onClose, onUpdate }: ReviewModalProp
                   AI Recommendation
                 </p>
                 <Badge variant={result.decision}>{result.decision}</Badge>
+                {result.confidence != null && (
+                  <span className="ml-auto text-[11px] font-mono text-muted-foreground">
+                    {result.confidence}% confidence
+                  </span>
+                )}
               </div>
+              {result.confidence != null && (
+                <div className="mb-2">
+                  <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        result.confidence >= 85
+                          ? 'bg-include'
+                          : result.confidence >= 65
+                          ? 'bg-amber-500'
+                          : 'bg-exclude'
+                      }`}
+                      style={{ width: `${result.confidence}%` }}
+                    />
+                  </div>
+                  {result.confidenceReason && (
+                    <p className="text-[11px] text-muted-foreground mt-1">{result.confidenceReason}</p>
+                  )}
+                </div>
+              )}
               <p className="text-sm text-foreground leading-relaxed">{result.aiReasoning}</p>
             </div>
           )}

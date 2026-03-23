@@ -141,6 +141,8 @@ export interface SearchResult {
   decision: DecisionType;
   rationale: string;
   aiReasoning: string;
+  confidence?: number;       // 0–100
+  confidenceReason?: string;
 }
 
 export interface SearchSession {

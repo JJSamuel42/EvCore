@@ -118,7 +118,10 @@ const MOCK_ABSTRACTS = [
   },
 ];
 
-function generateAIReasoning(result: Omit<SearchResult, 'decision' | 'aiReasoning'>, aiContext: string): { decision: 'include' | 'exclude'; aiReasoning: string } {
+function generateAIReasoning(
+  result: Omit<SearchResult, 'decision' | 'aiReasoning' | 'confidence' | 'confidenceReason'>,
+  aiContext: string
+): { decision: 'include' | 'exclude'; aiReasoning: string; confidence: number; confidenceReason: string } {
   const abstract = result.abstract.toLowerCase();
   const title = result.title.toLowerCase();
 
@@ -127,6 +130,8 @@ function generateAIReasoning(result: Omit<SearchResult, 'decision' | 'aiReasonin
     return {
       decision: 'exclude',
       aiReasoning: 'This study appears to be an in vitro or preclinical study. Based on the provided context, clinical human studies are required for inclusion. The abstract describes laboratory/cell-based models rather than patient populations.',
+      confidence: 95,
+      confidenceReason: 'Clearly non-clinical study design detected in abstract',
     };
   }
 
@@ -135,6 +140,8 @@ function generateAIReasoning(result: Omit<SearchResult, 'decision' | 'aiReasonin
     return {
       decision: 'exclude',
       aiReasoning: 'This study focuses exclusively on adolescent patients. If the scope is limited to adult populations, this study should be excluded. Review inclusion criteria to confirm age requirements.',
+      confidence: 80,
+      confidenceReason: 'Population appears to be adolescents only; adult criteria may not be met',
     };
   }
 
@@ -143,6 +150,8 @@ function generateAIReasoning(result: Omit<SearchResult, 'decision' | 'aiReasonin
     return {
       decision: 'include',
       aiReasoning: 'This is a high-quality study (RCT or systematic review/meta-analysis) directly relevant to the search topic. It reports outcomes in the target population using validated measures and meets the inclusion criteria for study design, population, and outcomes.',
+      confidence: 92,
+      confidenceReason: 'High-quality study design (RCT or systematic review/meta-analysis) with clear relevance',
     };
   }
 
@@ -151,6 +160,8 @@ function generateAIReasoning(result: Omit<SearchResult, 'decision' | 'aiReasonin
     return {
       decision: 'include',
       aiReasoning: 'This real-world or observational study provides complementary evidence to clinical trial data. It evaluates outcomes in a broader, more representative patient population and meets inclusion criteria for study design and reported outcomes.',
+      confidence: 78,
+      confidenceReason: 'Real-world evidence design; complementary to controlled trial data',
     };
   }
 
@@ -159,12 +170,16 @@ function generateAIReasoning(result: Omit<SearchResult, 'decision' | 'aiReasonin
     return {
       decision: 'include',
       aiReasoning: 'This health economic study is relevant to understanding the disease and treatment burden. It provides cost and resource utilization data that may be relevant to HEOR analyses.',
+      confidence: 74,
+      confidenceReason: 'Health economic content identified; relevant to HEOR dossier scope',
     };
   }
 
   return {
     decision: 'include',
     aiReasoning: 'This study appears to meet the general inclusion criteria based on its focus on the target disease and population. Further expert review is recommended to confirm eligibility.',
+    confidence: 60,
+    confidenceReason: 'No strong exclusion signals detected; expert review recommended',
   };
 }
 
@@ -187,8 +202,8 @@ const INITIAL_SESSIONS: SearchSession[] = [
       language: 'english',
     },
     results: MOCK_ABSTRACTS.map((r) => {
-      const { decision, aiReasoning } = generateAIReasoning(r, 'Focus on adult patients with moderate-to-severe atopic dermatitis. Include RCTs, real-world studies, systematic reviews, and health economic analyses. Exclude animal and in vitro studies.');
-      return { ...r, decision, aiReasoning, rationale: '' };
+      const { decision, aiReasoning, confidence, confidenceReason } = generateAIReasoning(r, 'Focus on adult patients with moderate-to-severe atopic dermatitis. Include RCTs, real-world studies, systematic reviews, and health economic analyses. Exclude animal and in vitro studies.');
+      return { ...r, decision, aiReasoning, confidence, confidenceReason, rationale: '' };
     }),
     aiContext: 'Focus on adult patients with moderate-to-severe atopic dermatitis. Include RCTs, real-world studies, systematic reviews, and health economic analyses. Exclude animal and in vitro studies. Looking for evidence supporting the HEOR value dossier for dupilumab.',
     createdAt: '2024-03-01T10:00:00Z',
@@ -321,8 +336,8 @@ export const useLitSearchStore = create<LitSearchState>()(
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
         const updatedResults = session.results.map((result) => {
-          const { decision, aiReasoning } = generateAIReasoning(result, session.aiContext);
-          return { ...result, decision, aiReasoning };
+          const { decision, aiReasoning, confidence, confidenceReason } = generateAIReasoning(result, session.aiContext);
+          return { ...result, decision, aiReasoning, confidence, confidenceReason };
         });
 
         set((state) => ({

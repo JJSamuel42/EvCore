@@ -28,6 +28,7 @@ export interface LibraryColumn {
   order: number;
   isDefault?: boolean;
   hidden?: boolean;
+  width?: number;
 }
 
 export interface DateQuickAction {

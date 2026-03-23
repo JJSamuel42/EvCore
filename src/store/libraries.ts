@@ -713,6 +713,20 @@ export const useLibraryStore = create<LibraryState>()(
     }),
     {
       name: 'ehcore-libraries',
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        if (version < 2) {
+          // Backfill categoryHierarchy on libraries that predate this field
+          const state = persistedState as { libraries?: any[] };
+          if (Array.isArray(state.libraries)) {
+            state.libraries = state.libraries.map((lib: any) => ({
+              ...lib,
+              categoryHierarchy: lib.categoryHierarchy ?? DEFAULT_CATEGORY_HIERARCHY.map((n) => ({ ...n })),
+            }));
+          }
+        }
+        return persistedState;
+      },
     }
   )
 );

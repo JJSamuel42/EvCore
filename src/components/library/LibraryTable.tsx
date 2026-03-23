@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/Badge';
 import { ColumnEditor } from './ColumnEditor';
 import { Dialog, DialogContent, DialogClose } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
-import { useLibraryStore } from '@/store/libraries';
+import { useLibraryStore, DEFAULT_CATEGORY_HIERARCHY } from '@/store/libraries';
 import { cn, truncate, formatDate, formatNumber } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 
@@ -114,8 +114,13 @@ export function LibraryTable({ library }: LibraryTableProps) {
   }, [showCategoryPicker]);
 
   // ── Category hierarchy editing ────────────────────────────────────────
-  const [localHierarchy, setLocalHierarchy] = useState<CategoryNode[]>(() => library.categoryHierarchy);
-  useEffect(() => setLocalHierarchy(library.categoryHierarchy), [library.categoryHierarchy]);
+  const [localHierarchy, setLocalHierarchy] = useState<CategoryNode[]>(
+    () => library.categoryHierarchy ?? DEFAULT_CATEGORY_HIERARCHY
+  );
+  useEffect(
+    () => setLocalHierarchy(library.categoryHierarchy ?? DEFAULT_CATEGORY_HIERARCHY),
+    [library.categoryHierarchy]
+  );
 
   const saveHierarchy = () => {
     updateCategoryHierarchy(library.id, localHierarchy);
@@ -243,7 +248,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
     productFilter || indicationFilter || Object.values(colFilters).some(Boolean) || categorySelection || dateFrom || dateTo;
 
   // Derive whether categorySelection is a parent category or a subcategory
-  const categoryHierarchy = library.categoryHierarchy;
+  const categoryHierarchy = library.categoryHierarchy ?? DEFAULT_CATEGORY_HIERARCHY;
   const categorySelectionIsParent = categoryHierarchy.some((n) => n.category === categorySelection);
 
   const applyQuickDate = (action: DateQuickAction) => {

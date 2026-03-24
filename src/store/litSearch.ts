@@ -19,6 +19,9 @@ function buildPubMedQuery(terms: SearchTerm[]): string {
   return query;
 }
 
+// Simulated total hits returned by PubMed for this type of query
+export const SIMULATED_TOTAL_HITS = 1247;
+
 const MOCK_ABSTRACTS = [
   {
     pmid: '38471234',
@@ -112,6 +115,222 @@ const MOCK_ABSTRACTS = [
     pubDate: '2024-01-20',
     link: 'https://pubmed.ncbi.nlm.nih.gov/38198034',
     abstract: 'Purpose: To assess real-world dupilumab persistence and treatment patterns in patients with moderate-to-severe AD over 3 years. Methods: Retrospective analysis of electronic health records (n=892 patients). Drug persistence, discontinuation reasons, switching patterns, and concomitant medication use were analyzed. Results: 3-year persistence rate: 73.2%. Main discontinuation reasons: inadequate response (12.4%), patient preference (7.8%), adverse events (4.6%), insurance issues (5.4%). 18.3% required dose adjustment or shortened injection interval. Healthcare resource utilization decreased significantly in year 2 and 3 compared to pre-treatment period. Conclusion: Dupilumab shows high real-world persistence over 3 years with significant reduction in healthcare resource utilization.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38612904',
+    title: 'Budget impact analysis of dupilumab for moderate-to-severe atopic dermatitis in a US managed care population',
+    authors: 'Feldman SR, Cox L, Zhu B, Bansal A, Goldblum O',
+    journal: 'Journal of Managed Care & Specialty Pharmacy',
+    pubDate: '2024-03-05',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38612904',
+    abstract: 'Background: Budget impact models (BIM) help payers assess the financial consequences of adopting new therapies. Objective: Estimate the 3-year budget impact of dupilumab in a US health plan of 1 million members. Methods: BIM from payer perspective. Drug costs based on 2024 WAC, with real-world adherence and dosing. Comparators: cyclosporine, methotrexate, azathioprine, biologics (baricitinib, abrocitinib). Results: Annual per-member-per-year cost increase of $0.12-0.18. Dupilumab associated with 34% reduction in systemic corticosteroid use and 28% reduction in dermatology visits. Net budget impact remains positive but offset by healthcare savings. Conclusion: Dupilumab offers acceptable budget impact when accounting for downstream cost offsets.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '37823691',
+    title: 'Sleep disturbance and its economic impact in patients with atopic dermatitis: analysis from a patient registry',
+    authors: 'Silverberg JI, Garg NK, Paller AS, Fishbein AB, Zee PC',
+    journal: 'Journal of Sleep Research',
+    pubDate: '2023-09-12',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/37823691',
+    abstract: 'Background: Sleep disturbance is a major but under-evaluated burden of atopic dermatitis (AD). Methods: Cross-sectional analysis of an AD patient registry (n=1,432 adults). Sleep quality assessed via PSQI; work productivity via WPAI. Results: 68.3% reported poor sleep (PSQI >5). Moderate-severe AD associated with significantly worse sleep than mild AD (mean PSQI 12.4 vs 6.8). Sleep disturbance correlated with absenteeism (r=0.48) and presenteeism (r=0.62). Annual indirect cost attributable to sleep-related productivity loss: $3,840/patient. Biologic use associated with 54% improvement in PSQI versus conventional treatment. Conclusion: Sleep disturbance in AD significantly impacts work productivity and represents a substantial indirect economic burden.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38334512',
+    title: 'Comorbidity burden and healthcare resource utilization in atopic dermatitis: a claims database analysis',
+    authors: 'Nygaard U, Vestergaard C, Deleuran M, Deleuran B',
+    journal: 'Acta Dermato-Venereologica',
+    pubDate: '2024-01-28',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38334512',
+    abstract: 'Objective: To characterize comorbidity patterns and healthcare resource utilization (HCRU) in patients with atopic dermatitis (AD) compared with matched controls. Methods: Retrospective cohort study using US commercial claims (2018-2023). AD patients (n=48,231) matched 1:3 to non-AD controls. Comorbidities, physician visits, ED visits, hospitalizations, and costs analysed. Results: AD patients had significantly higher rates of asthma (OR 3.2), allergic rhinitis (OR 2.9), anxiety (OR 1.8), and depression (OR 1.7). All-cause HCRU was 2.4x higher in AD versus controls. Annual total healthcare costs: $12,430 (AD) vs $4,210 (controls). Severe AD patients incurred 3.1x higher costs than mild. Conclusion: AD is associated with significant comorbidity burden and substantially higher HCRU and costs.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38558721',
+    title: 'Long-term safety of dupilumab: integrated analysis of clinical trials through 5 years',
+    authors: 'Blauvelt A, Guttman-Yassky E, Paller AS, et al.',
+    journal: 'JAMA Dermatology',
+    pubDate: '2024-02-28',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38558721',
+    abstract: 'Importance: Long-term safety data are essential for chronic therapies like dupilumab. Objective: Characterize the long-term safety profile of dupilumab across the AD clinical development programme. Design: Integrated analysis of 9 Phase 2/3 randomised controlled trials (n=4,210 patients; 13,044 patient-years of exposure). Results: No new safety signals emerged through year 5. Injection-site reactions declined over time. Conjunctivitis incidence: 9.7% (dupilumab) vs 2.2% (placebo). No increase in serious infections, malignancies, or cardiovascular events versus placebo. No clinically relevant changes in laboratory parameters. Conclusion: Dupilumab demonstrates a consistent and acceptable safety profile over 5 years of treatment in patients with moderate-to-severe AD.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '37698204',
+    title: 'Cost-effectiveness of dupilumab compared with cyclosporine in adults with moderate-to-severe atopic dermatitis in the UK',
+    authors: 'Boyers D, Elliott T, Shim E, Hessler G, Mugford M',
+    journal: 'PharmacoEconomics',
+    pubDate: '2023-08-01',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/37698204',
+    abstract: 'Objective: To assess the cost-effectiveness of dupilumab versus cyclosporine from the UK NHS perspective. Methods: Patient-level simulation model with lifetime horizon. Clinical inputs from CHRONOS trial and observational data. Costs and health utilities sourced from NHS reference costs and published literature. Results: Dupilumab yielded 2.14 additional QALYs at an incremental cost of £28,450 versus cyclosporine. Incremental cost-effectiveness ratio (ICER): £13,294/QALY. At the £20,000/QALY threshold, dupilumab had 82% probability of cost-effectiveness. Key drivers: QALY gains from skin clearance and reduced itch, and reduced concomitant medication use. Conclusion: Dupilumab is likely cost-effective versus cyclosporine for moderate-to-severe AD in the UK.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38044123',
+    title: 'Patient perspectives on dupilumab treatment for atopic dermatitis: a qualitative interview study',
+    authors: 'Nettis E, Di Leo E, Foti C, Stingeni L, Canonica GW',
+    journal: 'Patient Preference and Adherence',
+    pubDate: '2023-11-30',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38044123',
+    abstract: 'Background: Patient-reported treatment experiences can inform shared decision-making in atopic dermatitis (AD). Methods: Semi-structured qualitative interviews with 32 adults with moderate-to-severe AD treated with dupilumab for ≥6 months. Thematic analysis conducted. Results: Key themes: (1) marked improvement in skin appearance and itch; (2) improved sleep and daily functioning; (3) enhanced self-confidence and social participation; (4) manageable injection experience; (5) concerns about long-term use and cost. Most patients reported dupilumab as a "life-changing" treatment. Minor concerns related to conjunctivitis side effects. Conclusion: Patients report substantial improvements in quality of life with dupilumab, with manageable side effects.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38172634',
+    title: 'Dupilumab versus JAK inhibitors for moderate-to-severe atopic dermatitis: a network meta-analysis',
+    authors: 'Thyssen JP, de Bruin-Weller M, Guttman-Yassky E, et al.',
+    journal: 'Journal of the American Academy of Dermatology',
+    pubDate: '2024-01-05',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38172634',
+    abstract: 'Background: Direct head-to-head trials comparing biologics and JAK inhibitors in AD are lacking. Objective: Conduct a network meta-analysis (NMA) comparing dupilumab with JAK inhibitors for moderate-to-severe AD. Methods: Systematic review and Bayesian NMA of 38 RCTs. Primary outcome: EASI-75 at 16 weeks. Results: All active treatments superior to placebo. Abrocitinib 200mg ranked highest (P-score 0.81) for EASI-75, followed by upadacitinib 30mg, dupilumab, baricitinib 4mg. Differences among active treatments were modest and confidence intervals overlapping. Dupilumab showed most favourable safety profile with lowest risk of serious adverse events. Conclusion: Dupilumab offers a well-balanced efficacy-safety profile across the available treatment options for moderate-to-severe AD.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '37912543',
+    title: 'Work productivity loss in patients with atopic dermatitis: systematic review and meta-analysis',
+    authors: 'Vakharia PP, Chopra R, Silverberg JI',
+    journal: 'Dermatology',
+    pubDate: '2023-10-20',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/37912543',
+    abstract: 'Background: Atopic dermatitis (AD) can impair work productivity but the magnitude is uncertain. Methods: Systematic review and meta-analysis of 28 studies reporting work productivity outcomes in AD using WPAI or similar instruments. Results: Pooled absenteeism: 8.4% (95% CI 6.2-10.6%). Pooled presenteeism: 29.7% (95% CI 24.3-35.1%). Overall work impairment: 33.1%. Productivity loss correlated with disease severity (r=0.61). Annual economic value of productivity loss: $7,230/patient with moderate-severe AD. Treatment with biologics reduced overall work impairment by 52% versus baseline. Conclusion: AD imposes substantial work productivity loss, particularly in moderate-severe disease, which is substantially mitigated by effective systemic therapy.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38390812',
+    title: 'Dupilumab in special populations: pregnancy, lactation, and elderly patients — a real-world evidence review',
+    authors: 'Mian M, Tran K, Srivastava A, Drucker AM',
+    journal: 'Dermatologic Therapy',
+    pubDate: '2024-02-10',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38390812',
+    abstract: 'Background: Data on dupilumab use in special populations are limited. Methods: Systematic review of real-world studies reporting dupilumab use in pregnant women, lactating women, and elderly patients (≥65 years) with AD. Results: 18 studies included (n=412 pregnant exposures, n=89 lactating, n=347 elderly). No increased risk of adverse pregnancy outcomes observed compared to general AD population. Dupilumab detected in breast milk at very low concentrations; no neonatal adverse events reported. In elderly patients, efficacy similar to younger adults; no significant increase in serious adverse events. Conclusion: Emerging real-world data support an acceptable benefit-risk profile of dupilumab in pregnant, lactating, and elderly AD patients, though controlled studies are needed.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38054789',
+    title: 'Pediatric atopic dermatitis: epidemiology, burden, and treatment landscape update 2024',
+    authors: 'Paller AS, Kabashima K, Bieber T',
+    journal: 'Journal of Allergy and Clinical Immunology',
+    pubDate: '2023-12-01',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38054789',
+    abstract: 'Atopic dermatitis (AD) in children is a common inflammatory skin disease with significant psychosocial and family burden. This review summarises the epidemiology, pathophysiology, and treatment landscape for pediatric AD through 2024. Prevalence in children: 15-20% in high-income countries. Severe AD affects approximately 10-15% of pediatric cases. Recent advances include dupilumab approval for children ≥6 months, tralokinumab for ≥12 years, and JAK inhibitors for adolescents. Unmet needs include long-term safety data in very young children, access to biologics, and biomarkers to guide treatment selection. Family caregiver burden remains high with average annual productivity loss of $4,200-6,800 per family.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38244903',
+    title: 'Itch neuroscience in atopic dermatitis: mechanisms and therapeutic implications',
+    authors: 'Mollanazar NK, Smith PK, Yosipovitch G',
+    journal: 'JAMA Dermatology',
+    pubDate: '2024-01-18',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38244903',
+    abstract: 'Itch (pruritus) is the cardinal symptom of atopic dermatitis (AD) and drives disease burden. This review covers the neural pathways mediating itch in AD, including the roles of IL-4, IL-13, IL-31, TSLP, and substance P. Central sensitization contributes to chronic itch in severe AD. Targeted therapies (dupilumab, nemolizumab, tralokinumab) act on specific pruritogenic pathways. Dupilumab demonstrates rapid and sustained itch reduction via IL-4Rα blockade, reducing TARC and periostin. Emerging neuroimmune targets include OSMRβ (nemolizumab) and NK1R (serlopitant). Understanding itch mechanisms is critical for developing next-generation antipruritic therapies.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '37789056',
+    title: 'Caregiver burden in pediatric atopic dermatitis: a cross-sectional analysis',
+    authors: 'Chamlin SL, Mattson CL, Williams ML, et al.',
+    journal: 'JAMA Dermatology',
+    pubDate: '2023-09-01',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/37789056',
+    abstract: 'Background: Pediatric atopic dermatitis (AD) significantly affects family functioning, but data on caregiver burden remain limited. Methods: Cross-sectional study of 342 caregivers of children with AD. Caregiver burden assessed using Dermatitis Family Impact (DFI) questionnaire. Work productivity via WPAI. Results: Mean DFI score: 14.6 (out of 30). Sleep disturbance in caregivers: 78%. Absenteeism: 9.2%; presenteeism: 31.8%. Annual caregiver productivity cost: $5,840. Younger children and more severe disease associated with higher caregiver burden. Caregivers of children treated with biologics reported significantly lower DFI scores (-6.2 points). Conclusion: Pediatric AD imposes substantial caregiver burden, particularly affecting sleep and work productivity.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38488234',
+    title: 'Tapering and discontinuation of dupilumab in atopic dermatitis: real-world experience from 6 European centres',
+    authors: 'Wollenberg A, Barbarot S, Bieber T, et al.',
+    journal: 'British Journal of Dermatology',
+    pubDate: '2024-02-22',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38488234',
+    abstract: 'Background: Real-world data on dupilumab tapering and discontinuation are lacking. Methods: Retrospective cohort study across 6 European dermatology centres. Patients with moderate-to-severe AD who attempted dupilumab tapering (n=156) or discontinuation (n=89) were included. Results: Successful tapering to q4w dosing: 61.5%. Disease relapse during tapering: 38.5% (median time to relapse: 14 weeks). After discontinuation, 43.8% achieved remission at 6 months; 56.2% required treatment restart within 12 months. Baseline IGA 0/1 before tapering was the strongest predictor of successful taper. No rebound phenomenon observed on discontinuation. Conclusion: Dupilumab tapering is feasible in a subset of patients achieving complete/near-complete response; discontinuation leads to relapse in the majority.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '37901234',
+    title: 'Utility values and health state preferences in atopic dermatitis: a systematic review for economic modelling',
+    authors: 'Lloyd A, Doyle S, Dewilde S, Brazier J',
+    journal: 'Value in Health',
+    pubDate: '2023-10-10',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/37901234',
+    abstract: 'Background: Utility values are required to calculate quality-adjusted life years (QALYs) in economic models of atopic dermatitis (AD). Methods: Systematic review of studies reporting utility values in AD. 43 studies identified. Results: Utility values varied by severity: mild AD 0.81-0.88; moderate AD 0.67-0.76; severe AD 0.54-0.63. EQ-5D most commonly used instrument. Biologic treatment associated with utility gains of 0.14-0.21 from baseline. Mapping algorithms available for DLQI-to-EQ-5D conversion. Substantial variation across countries noted. Conclusion: This systematic review provides a comprehensive utility database for use in economic models of AD and highlights the substantial HRQoL burden across severity levels.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38301456',
+    title: 'Dupilumab for atopic dermatitis in children aged 6 months to 5 years: safety and efficacy in the LIBERTY AD PRESCHOOL trial',
+    authors: 'Paller AS, Bansal A, Simpson EL, et al.',
+    journal: 'NEJM Evidence',
+    pubDate: '2024-01-24',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38301456',
+    abstract: 'Background: Atopic dermatitis in preschool children is poorly controlled with available therapies. Methods: Phase 3, randomized, double-blind, placebo-controlled trial in children aged 6 months to 5 years with moderate-to-severe AD (n=162). Primary endpoint: IGA 0/1 at week 16. Results: IGA 0/1 achieved in 28.4% dupilumab vs 4.1% placebo (P<0.001). EASI-75 in 53.0% vs 11.0%. Peak pruritus NRS improvement significantly greater with dupilumab. Safety profile consistent with older populations. Conclusion: Dupilumab significantly improved skin clearance and itch in very young children with moderate-to-severe AD with an acceptable safety profile.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38145078',
+    title: 'Biomarkers predicting dupilumab response in atopic dermatitis: a systematic review',
+    authors: 'Cabanillas B, Novak N',
+    journal: 'Allergy',
+    pubDate: '2024-01-02',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38145078',
+    abstract: 'Background: Identifying biomarkers predictive of dupilumab response may optimise patient selection in AD. Methods: Systematic review of 24 studies examining biomarkers (serum, tissue, genetic) in dupilumab-treated AD patients. Results: Elevated serum TARC/CCL17 and IgE at baseline were most consistently associated with treatment response. Skin transcriptomic signatures (Th2 skewing) correlated with EASI improvement. FLG loss-of-function variants did not predict response. Baseline EASI and age showed inconsistent associations. No single biomarker met criteria for clinical implementation. Conclusion: Multiple biomarkers show promise for predicting dupilumab response in AD but require prospective validation before clinical use.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '38589012',
+    title: 'Switching from dupilumab to JAK inhibitors in atopic dermatitis: effectiveness and safety in a multicenter cohort',
+    authors: 'Reich K, Thyssen JP, Blauvelt A, et al.',
+    journal: 'Journal of the European Academy of Dermatology and Venereology',
+    pubDate: '2024-03-01',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/38589012',
+    abstract: 'Background: Some AD patients switch from dupilumab to JAK inhibitors due to inadequate response or side effects. Methods: Retrospective analysis of 234 patients who switched from dupilumab to upadacitinib (n=142) or abrocitinib (n=92). Reasons for switch, response rates, and safety recorded. Results: Main reasons for switch: dupilumab non-response (52%), conjunctivitis (28%), patient preference (20%). At 16 weeks post-switch: EASI-75 in 58.4%; IGA 0/1 in 38.2%. Response higher in primary non-responders versus secondary failures. AEs: headache (12%), nausea (8%), acne (11%). No thromboembolic events. Conclusion: Switching to JAK inhibitors is a viable strategy for dupilumab-inadequate AD patients, with meaningful clinical responses achieved.',
+    decision: null as 'include' | 'exclude' | null,
+    rationale: '',
+    aiReasoning: '',
+  },
+  {
+    pmid: '37645201',
+    title: 'Atopic dermatitis and mental health: a population-based cohort study of depression, anxiety, and suicidality',
+    authors: 'Andersen YMF, Egeberg A, Skov L, Gislason G, Thyssen JP',
+    journal: 'JAMA Dermatology',
+    pubDate: '2023-07-15',
+    link: 'https://pubmed.ncbi.nlm.nih.gov/37645201',
+    abstract: 'Importance: The mental health burden of atopic dermatitis (AD) is increasingly recognised but population-based data are limited. Objective: Assess rates of depression, anxiety, and suicidality in adults with AD compared with the general population. Design: Nationwide Danish cohort study 2010-2022 (AD n=89,405; controls n=357,620). Main Outcomes: Incident depression, anxiety disorder, self-harm, suicidal ideation, and suicide. Results: Hazard ratios for AD vs controls: depression 1.42 (95% CI 1.38-1.46); anxiety 1.35; self-harm 1.28; suicidal ideation 1.41. Severe AD had highest risk estimates. Biologic therapy associated with significant risk reduction for depression (HR 0.72). Conclusion: AD is associated with substantially elevated mental health risks; effective treatment may reduce psychiatric comorbidities.',
     decision: null as 'include' | 'exclude' | null,
     rationale: '',
     aiReasoning: '',
@@ -307,23 +526,40 @@ export const useLitSearchStore = create<LitSearchState>()(
         set({ activeSessionId: id });
       },
 
-      runSearch: async (sessionId) => {
+      runSearch: async (sessionId, page = 1) => {
         const session = get().sessions.find((s) => s.id === sessionId);
         if (!session) return;
 
-        // Simulate PubMed API call
+        // Simulate PubMed API call with realistic hit count
         await new Promise((resolve) => setTimeout(resolve, 1500));
 
-        const results: SearchResult[] = MOCK_ABSTRACTS.map((r) => ({
-          ...r,
-          decision: null,
-          rationale: '',
-          aiReasoning: '',
-        }));
+        const PAGE_SIZE = 25;
+        const start = (page - 1) * PAGE_SIZE;
+        // Cycle through MOCK_ABSTRACTS to fill pages (wraps around for demo)
+        const pageResults: SearchResult[] = Array.from({ length: PAGE_SIZE }, (_, i) => {
+          const src = MOCK_ABSTRACTS[(start + i) % MOCK_ABSTRACTS.length];
+          // Make PMIDs unique per page/position when cycling
+          return {
+            ...src,
+            pmid: page === 1 ? src.pmid : `${src.pmid}-p${page}-${i}`,
+            decision: null,
+            rationale: '',
+            aiReasoning: '',
+          };
+        });
+
+        const prevResults = page === 1 ? [] : (session.results ?? []);
 
         set((state) => ({
           sessions: state.sessions.map((s) =>
-            s.id === sessionId ? { ...s, results, lastRun: new Date().toISOString() } : s
+            s.id === sessionId
+              ? {
+                  ...s,
+                  results: [...prevResults, ...pageResults],
+                  totalHits: SIMULATED_TOTAL_HITS,
+                  lastRun: new Date().toISOString(),
+                }
+              : s
           ),
         }));
       },

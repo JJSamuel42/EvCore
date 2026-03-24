@@ -85,7 +85,7 @@ export interface LitSearchState {
   setResults: (sessionId: string, results: SearchResult[]) => void;
   updateResult: (sessionId: string, pmid: string, data: Partial<SearchResult>) => void;
   setActiveSession: (id: string | null) => void;
-  runSearch: (sessionId: string) => Promise<void>;
+  runSearch: (sessionId: string, page?: number) => Promise<void>;
   runAIReview: (sessionId: string) => Promise<void>;
 }
 
@@ -162,6 +162,7 @@ export interface SearchSession {
   aiContext: string;
   lastRun: string | null;
   createdAt: string;
+  totalHits?: number;   // simulated PubMed hit count
 }
 
 // ============================================================

@@ -82,7 +82,6 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
               label="Column Name"
               value={local.name}
               onChange={(e) => setLocal((p) => ({ ...p, name: e.target.value }))}
-              disabled={column.isDefault}
             />
 
             <Input
@@ -97,7 +96,6 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
               value={local.type}
               onValueChange={(v) => setLocal((p) => ({ ...p, type: v as LibraryColumn['type'] }))}
               options={TYPE_OPTIONS}
-              disabled={column.isDefault}
             />
 
             {local.type === 'select' && (
@@ -167,17 +165,13 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
           </div>
 
           <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            {!column.isDefault ? (
-              <button
-                onClick={() => { onDelete(); setOpen(false); }}
-                className="flex items-center gap-1 text-xs text-exclude hover:text-exclude/80 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Column</span>
-              </button>
-            ) : (
-              <span className="text-[11px] text-muted-foreground font-mono">Default column</span>
-            )}
+            <button
+              onClick={() => { onDelete(); setOpen(false); }}
+              className="flex items-center gap-1 text-xs text-exclude hover:text-exclude/80 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Column</span>
+            </button>
             <Button size="sm" variant="primary" onClick={handleSave}>
               Save
             </Button>

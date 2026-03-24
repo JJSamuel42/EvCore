@@ -12,6 +12,10 @@ import {
   ChevronUp,
   BookmarkPlus,
   Library,
+  ChevronLeft,
+  ChevronRight,
+  AlertTriangle,
+  Layers,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { AppShell } from '@/components/layout/AppShell';
@@ -40,20 +44,26 @@ export default function LitSearchSessionPage() {
   const { id } = useParams<{ id: string }>();
   const { sessions, addTerm, removeTerm, updateSession, setFilters, updateResult, runSearch, runAIReview } =
     useLitSearchStore();
-  const { libraries, addArticle } = useLibraryStore();
+  const { libraries, addArticle, bulkProcessArticles } = useLibraryStore();
 
   const session = sessions.find((s) => s.id === id);
 
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [abstractResult, setAbstractResult] = useState<SearchResult | null>(null);
   const [reviewResult, setReviewResult] = useState<SearchResult | null>(null);
   const [activePresets, setActivePresets] = useState<string[]>([]);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [sortCol, setSortCol] = useState<string | null>(null);
+  const [resultsPage, setResultsPage] = useState(1);
   const [showPushDialog, setShowPushDialog] = useState(false);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string>('');
   const [pushDone, setPushDone] = useState(false);
+  const [pushDuplicates, setPushDuplicates] = useState<string[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkProcessDone, setBulkProcessDone] = useState(false);
+  const [pushedArticleIds, setPushedArticleIds] = useState<string[]>([]);
 
   if (!session) {
     return (
@@ -74,10 +84,22 @@ export default function LitSearchSessionPage() {
 
   const handleRunSearch = async () => {
     setIsSearching(true);
+    setResultsPage(1);
     try {
-      await runSearch(session.id);
+      await runSearch(session.id, 1);
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    const nextPage = Math.floor(session.results.length / 25) + 1;
+    setIsLoadingMore(true);
+    try {
+      await runSearch(session.id, nextPage);
+      setResultsPage(nextPage);
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -101,6 +123,7 @@ export default function LitSearchSessionPage() {
     updateSession(session.id, { aiContext: combined });
   };
 
+  const RESULTS_PER_PAGE = 25;
   const sortedResults = [...session.results].sort((a, b) => {
     if (!sortCol) return 0;
     const av = (a as any)[sortCol] ?? '';
@@ -108,6 +131,7 @@ export default function LitSearchSessionPage() {
     const cmp = String(av).localeCompare(String(bv));
     return sortDir === 'asc' ? cmp : -cmp;
   });
+  const pagedResults = sortedResults.slice(0, resultsPage * RESULTS_PER_PAGE);
 
   const included = session.results.filter((r) => r.decision === 'include').length;
   const excluded = session.results.filter((r) => r.decision === 'exclude').length;
@@ -135,8 +159,18 @@ export default function LitSearchSessionPage() {
 
   const handlePushToLibrary = () => {
     if (!selectedLibraryId) return;
+    const targetLibrary = libraries.find((l) => l.id === selectedLibraryId);
+    const existingPmids = new Set((targetLibrary?.articles ?? []).map((a) => a.pmid));
+
+    const duplicates: string[] = [];
+    const newIds: string[] = [];
+
     includedResults.forEach((r) => {
-      addArticle(selectedLibraryId, {
+      if (existingPmids.has(r.pmid)) {
+        duplicates.push(r.pmid);
+        return;
+      }
+      const article = addArticle(selectedLibraryId, {
         pmid: r.pmid,
         title: r.title,
         authors: r.authors,
@@ -144,7 +178,11 @@ export default function LitSearchSessionPage() {
         publicationDate: r.pubDate,
         publicationLink: r.link,
       });
+      if (article?.id) newIds.push(article.id);
     });
+
+    setPushDuplicates(duplicates);
+    setPushedArticleIds(newIds);
     setPushDone(true);
   };
 
@@ -181,6 +219,7 @@ export default function LitSearchSessionPage() {
                 onAddTerm={(term) => addTerm(session.id, term)}
                 onRemoveTerm={(termId) => removeTerm(session.id, termId)}
                 query={session.query}
+                onQueryChange={(q) => updateSession(session.id, { query: q })}
               />
 
               {/* Filters */}
@@ -349,9 +388,11 @@ export default function LitSearchSessionPage() {
               {/* Results Table */}
               {session.results.length > 0 && (
                 <div>
-                  <SectionLabel className="mb-4">
-                    Results ({session.results.length})
-                  </SectionLabel>
+                  <div className="flex items-center justify-between mb-4">
+                    <SectionLabel>
+                      Results — showing {session.results.length.toLocaleString()} of {(session.totalHits ?? session.results.length).toLocaleString()} hits on PubMed
+                    </SectionLabel>
+                  </div>
 
                   <div className="overflow-auto rounded-lg border border-border">
                     <table className="data-table min-w-full">
@@ -385,7 +426,7 @@ export default function LitSearchSessionPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedResults.map((result, idx) => (
+                        {pagedResults.map((result, idx) => (
                           <tr key={result.pmid}>
                             <td className="text-xs text-muted-foreground">{idx + 1}</td>
                             <td className="max-w-xs">
@@ -463,6 +504,37 @@ export default function LitSearchSessionPage() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination footer */}
+                  <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+                    <span>
+                      Showing {pagedResults.length.toLocaleString()} of {session.results.length.toLocaleString()} loaded
+                      {session.totalHits && session.totalHits > session.results.length && (
+                        <span> · {(session.totalHits - session.results.length).toLocaleString()} more on PubMed</span>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {pagedResults.length < session.results.length && (
+                        <button
+                          onClick={() => setResultsPage((p) => p + 1)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded border border-border hover:border-accent/40 hover:text-accent transition-colors"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                          Show next 25
+                        </button>
+                      )}
+                      {session.totalHits && session.results.length < session.totalHits && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          isLoading={isLoadingMore}
+                          onClick={handleLoadMore}
+                        >
+                          {isLoadingMore ? 'Loading…' : `Fetch next 25 from PubMed`}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -489,7 +561,7 @@ export default function LitSearchSessionPage() {
         />
 
         {/* Push to Library dialog */}
-        <Dialog open={showPushDialog} onOpenChange={setShowPushDialog}>
+        <Dialog open={showPushDialog} onOpenChange={(o) => { setShowPushDialog(o); if (!o) { setPushDone(false); setBulkProcessDone(false); setPushedArticleIds([]); setPushDuplicates([]); } }}>
           <DialogContent
             size="sm"
             title="Push to Library"
@@ -497,9 +569,59 @@ export default function LitSearchSessionPage() {
           >
             {pushDone ? (
               <div className="space-y-4">
+                {/* Success */}
                 <div className="p-3 bg-include-bg border border-include/30 rounded-md text-sm text-include">
-                  {includedResults.length} article{includedResults.length !== 1 ? 's' : ''} added to library successfully.
+                  {pushedArticleIds.length} article{pushedArticleIds.length !== 1 ? 's' : ''} added to library.
                 </div>
+
+                {/* Duplicates warning */}
+                {pushDuplicates.length > 0 && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-sm">
+                    <div className="flex items-center gap-2 text-amber-600 font-medium mb-1">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      {pushDuplicates.length} duplicate{pushDuplicates.length !== 1 ? 's' : ''} skipped
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      The following PMIDs already exist in the library and were not added:
+                    </p>
+                    <p className="text-xs font-mono text-foreground mt-1">{pushDuplicates.join(', ')}</p>
+                  </div>
+                )}
+
+                {/* Bulk AI processing */}
+                {pushedArticleIds.length > 0 && (
+                  <div className="p-3 border border-border rounded-md space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-muted-foreground" />
+                      <p className="text-sm font-medium text-foreground">Bulk AI Column Processing</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Run AI extraction to populate all columns for the {pushedArticleIds.length} newly added article{pushedArticleIds.length !== 1 ? 's' : ''}.
+                    </p>
+                    {bulkProcessDone ? (
+                      <p className="text-xs text-include font-medium">Columns processed successfully.</p>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        leftIcon={<Cpu className="w-3.5 h-3.5" />}
+                        isLoading={isBulkProcessing}
+                        onClick={async () => {
+                          setIsBulkProcessing(true);
+                          try {
+                            await bulkProcessArticles(selectedLibraryId, pushedArticleIds);
+                            setBulkProcessDone(true);
+                          } finally {
+                            setIsBulkProcessing(false);
+                          }
+                        }}
+                      >
+                        {isBulkProcessing ? 'Processing…' : 'Process columns with AI'}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex justify-end">
                   <Button variant="primary" size="sm" onClick={() => setShowPushDialog(false)}>
                     Done

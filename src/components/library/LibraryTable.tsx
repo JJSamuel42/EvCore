@@ -19,6 +19,7 @@ import {
   GripVertical,
   Eye,
   EyeOff,
+  Trash2,
 } from 'lucide-react';
 import { Library, LibraryArticle, LibraryColumn, SortState, DateQuickAction, CategoryNode } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -58,7 +59,7 @@ function getDateFromQuickAction(action: DateQuickAction): { from: string; to: st
 }
 
 export function LibraryTable({ library }: LibraryTableProps) {
-  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy } = useLibraryStore();
+  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy, deleteArticle } = useLibraryStore();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'researcher';
 
@@ -831,6 +832,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
                   </button>
                 </th>
               )}
+              {adminMode && <th className="w-8" title="Delete row" />}
             </tr>
           </thead>
 
@@ -1000,7 +1002,17 @@ export function LibraryTable({ library }: LibraryTableProps) {
                     </div>
                   </td>
 
-                  {adminMode && <td />}
+                  {adminMode && (
+                    <td>
+                      <button
+                        title="Delete article"
+                        onClick={() => deleteArticle(library.id, article.id)}
+                        className="p-1 rounded text-muted-foreground/40 hover:text-exclude hover:bg-exclude-bg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

@@ -13,6 +13,7 @@ interface SearchBuilderProps {
   onAddTerm: (term: Omit<SearchTerm, 'id'>) => void;
   onRemoveTerm: (termId: string) => void;
   query: string;
+  onQueryChange: (q: string) => void;
 }
 
 const PICO_TYPES: PICOType[] = ['P', 'I', 'C', 'O'];
@@ -29,7 +30,7 @@ const PICO_COLORS_BORDER: Record<PICOType, string> = {
   O: 'border-pico-o-bg border-pico-o/30 bg-pico-o-bg',
 };
 
-export function SearchBuilder({ terms, onAddTerm, onRemoveTerm, query }: SearchBuilderProps) {
+export function SearchBuilder({ terms, onAddTerm, onRemoveTerm, query, onQueryChange }: SearchBuilderProps) {
   const [newText, setNewText] = useState('');
   const [newType, setNewType] = useState<PICOType>('P');
   const [newOperator, setNewOperator] = useState<BooleanOperator>('AND');
@@ -146,15 +147,22 @@ export function SearchBuilder({ terms, onAddTerm, onRemoveTerm, query }: SearchB
         </Button>
       </div>
 
-      {/* Query Preview */}
+      {/* Query — editable */}
       {query && (
         <div className="mt-3">
-          <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5">
-            Generated PubMed Query
-          </p>
-          <div className="bg-foreground/5 border border-border rounded-md p-3 font-mono text-xs text-foreground leading-relaxed break-all">
-            {query}
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+              PubMed Query
+            </p>
+            <p className="text-[11px] text-muted-foreground italic">Editable — changes here override the generated query</p>
           </div>
+          <textarea
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            rows={3}
+            spellCheck={false}
+            className="w-full bg-foreground/5 border border-border rounded-md p-3 font-mono text-xs text-foreground leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+          />
         </div>
       )}
     </div>

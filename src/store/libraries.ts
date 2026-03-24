@@ -30,10 +30,11 @@ interface LibraryState {
   addColumn: (libraryId: string, column: Omit<LibraryColumn, 'id' | 'order'>) => void;
   updateColumn: (libraryId: string, columnId: string, data: Partial<LibraryColumn>) => void;
   deleteColumn: (libraryId: string, columnId: string) => void;
-  addArticle: (libraryId: string, article: Omit<LibraryArticle, 'id' | 'articleNumber'>) => void;
+  addArticle: (libraryId: string, article: Omit<LibraryArticle, 'id' | 'articleNumber'>) => LibraryArticle | null;
   updateArticle: (libraryId: string, articleId: string, data: Partial<LibraryArticle>) => void;
   updateArticleDossierSections: (libraryId: string, articleId: string, sections: string[]) => void;
   deleteArticle: (libraryId: string, articleId: string) => void;
+  bulkProcessArticles: (libraryId: string, articleIds: string[]) => Promise<void>;
   setActiveLibrary: (id: string | null) => void;
 }
 
@@ -672,7 +673,7 @@ export const useLibraryStore = create<LibraryState>()(
 
       addArticle: (libraryId, articleData) => {
         const library = get().libraries.find((l) => l.id === libraryId);
-        if (!library) return;
+        if (!library) return null;
         const articleNumber = library.articles.length + 1;
         const article = {
           ...articleData,
@@ -686,6 +687,7 @@ export const useLibraryStore = create<LibraryState>()(
               : lib
           ),
         }));
+        return article;
       },
 
       updateArticle: (libraryId, articleId, data) => {
@@ -730,6 +732,64 @@ export const useLibraryStore = create<LibraryState>()(
                 }
               : lib
           ),
+        }));
+      },
+
+      bulkProcessArticles: async (libraryId, articleIds) => {
+        const library = get().libraries.find((l) => l.id === libraryId);
+        if (!library) return;
+        // Simulate AI extraction delay (~400ms per article, max 5s)
+        const delay = Math.min(400 * articleIds.length, 5000);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        const PRODUCT_KEYWORDS: Record<string, string> = {
+          dupilumab: 'Dupilumab', dupixent: 'Dupilumab', 'il-4': 'Dupilumab', 'il-13': 'Dupilumab',
+        };
+        const INDICATION_KEYWORDS: Record<string, string> = {
+          'atopic dermatitis': 'Atopic Dermatitis', eczema: 'Atopic Dermatitis',
+          asthma: 'Asthma', 'prurigo nodularis': 'Prurigo Nodularis',
+          'allergic rhinitis': 'Allergic Rhinitis',
+        };
+
+        function inferText(text: string, map: Record<string, string>, fallback: string): string {
+          const lower = text.toLowerCase();
+          for (const [kw, val] of Object.entries(map)) {
+            if (lower.includes(kw)) return val;
+          }
+          return fallback;
+        }
+
+        set((state) => ({
+          libraries: state.libraries.map((lib) => {
+            if (lib.id !== libraryId) return lib;
+            return {
+              ...lib,
+              updatedAt: new Date().toISOString(),
+              articles: lib.articles.map((art) => {
+                if (!articleIds.includes(art.id)) return art;
+                const textBlob = `${art.title} ${art.abstract ?? ''}`.toLowerCase();
+                const updates: Record<string, any> = {};
+                for (const col of lib.columns) {
+                  if (art[col.id] !== undefined && art[col.id] !== '') continue; // skip filled
+                  if (col.name === 'Product' || col.name.toLowerCase().includes('product')) {
+                    updates[col.id] = inferText(textBlob, PRODUCT_KEYWORDS, '—');
+                  } else if (col.name === 'Indication' || col.name.toLowerCase().includes('indication')) {
+                    updates[col.id] = inferText(textBlob, INDICATION_KEYWORDS, '—');
+                  } else if (col.type === 'select' && col.predefinedValues?.length) {
+                    // Pick plausible value based on text
+                    const match = col.predefinedValues.find((v) => textBlob.includes(v.toLowerCase()));
+                    updates[col.id] = match ?? col.predefinedValues[0];
+                  } else if (col.type === 'number') {
+                    const nMatch = textBlob.match(/n\s*=\s*(\d+)/);
+                    updates[col.id] = nMatch ? parseInt(nMatch[1]) : null;
+                  } else if (col.type === 'text' && col.aiPrompt) {
+                    updates[col.id] = '(AI extracted — review required)';
+                  }
+                }
+                return { ...art, ...updates };
+              }),
+            };
+          }),
         }));
       },
 

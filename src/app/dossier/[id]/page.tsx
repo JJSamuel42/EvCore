@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/Input';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { AbstractModal } from '@/components/dossier/AbstractModal';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useDossierStore } from '@/store/dossier';
 import { useLibraryStore } from '@/store/libraries';
 import { DossierSection, DossierGenerateType, LibraryArticle } from '@/types';
@@ -124,15 +125,16 @@ function OutlinePanel({
           </span>
 
           {/* Title */}
-          <span
-            className={cn(
-              'flex-1 truncate leading-tight',
-              sec.level === 1 ? 'font-semibold font-serif text-[13px]' : 'text-xs'
-            )}
-            title={sec.title}
-          >
-            {sec.title}
-          </span>
+          <Tooltip content={sec.title} side="right" align="start">
+            <span
+              className={cn(
+                'flex-1 truncate leading-tight',
+                sec.level === 1 ? 'font-semibold font-serif text-[13px]' : 'text-xs'
+              )}
+            >
+              {sec.title}
+            </span>
+          </Tooltip>
 
           {/* Actions (show on hover or active) */}
           <div
@@ -726,6 +728,34 @@ export default function DossierBuilderPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addParentId, setAddParentId] = useState<string | null>(null);
   const [abstractArticle, setAbstractArticle] = useState<LibraryArticle | null>(null);
+  const [panelWidth, setPanelWidth] = useState(280);
+  const isResizing = useRef(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = panelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const delta = ev.clientX - resizeStartX.current;
+      setPanelWidth(Math.min(480, Math.max(180, resizeStartWidth.current + delta)));
+    };
+    const onUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [panelWidth]);
 
   const dossier = dossiers.find((d) => d.id === dossierId);
   const library = dossier ? libraries.find((l) => l.id === dossier.libraryId) : null;
@@ -830,7 +860,10 @@ export default function DossierBuilderPage() {
           {/* Two-panel layout */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left: Outline */}
-            <aside className="w-56 shrink-0 border-r border-border bg-card overflow-hidden flex flex-col">
+            <aside
+              className="shrink-0 border-r border-border bg-card overflow-hidden flex flex-col relative"
+              style={{ width: panelWidth }}
+            >
               <OutlinePanel
                 sections={dossier.sections}
                 activeSectionId={activeSectionId}
@@ -842,6 +875,14 @@ export default function DossierBuilderPage() {
                 onDelete={handleDeleteSection}
                 onMove={(id, dir) => moveSection(dossierId, id, dir)}
               />
+              {/* Drag handle */}
+              <div
+                onMouseDown={onResizeStart}
+                className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize group z-10"
+                title="Drag to resize"
+              >
+                <div className="absolute inset-y-0 right-0 w-px bg-border group-hover:bg-accent/50 transition-colors" />
+              </div>
             </aside>
 
             {/* Right: Section Editor */}

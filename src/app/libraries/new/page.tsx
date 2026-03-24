@@ -22,7 +22,7 @@ export default function NewLibraryPage() {
   const [indications, setIndications] = useState<string[]>([]);
   const [indicationInput, setIndicationInput] = useState('');
   const [description, setDescription] = useState('');
-  const [copyFromId, setCopyFromId] = useState('');
+  const [copyFromId, setCopyFromId] = useState('__none__');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -68,7 +68,7 @@ export default function NewLibraryPage() {
   };
 
   const libraryOptions = [
-    { value: '', label: 'Do not copy (start fresh)' },
+    { value: '__none__', label: 'Do not copy (start fresh)' },
     ...libraries.map((lib) => ({
       value: lib.id,
       label: `${lib.name} (${lib.innName}) — ${(lib.indications ?? []).join(', ')}`,

@@ -58,9 +58,14 @@ function getDateFromQuickAction(action: DateQuickAction): { from: string; to: st
 }
 
 export function LibraryTable({ library }: LibraryTableProps) {
-  const { updateColumn, deleteColumn, addColumn, updateArticle, updateDateQuickActions, updateCategoryHierarchy } = useLibraryStore();
+  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy } = useLibraryStore();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'researcher';
+
+  // ── Dossier section editing ───────────────────────────────────────────
+  const [editingDossierArt, setEditingDossierArt] = useState<string | null>(null);
+  const [dossierSecInput, setDossierSecInput] = useState('');
+  const dossierSecInputRef = useRef<HTMLInputElement>(null);
 
   // ── UI mode ──────────────────────────────────────────────────────────
   const [adminMode, setAdminMode] = useState(false);
@@ -800,6 +805,13 @@ export function LibraryTable({ library }: LibraryTableProps) {
                 </th>
               ))}
 
+              {/* Dossier Sections — always-visible fixed column */}
+              <th className="min-w-[140px]">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span>Dossier Sections</span>
+                </div>
+              </th>
+
               {adminMode && (
                 <th className="w-10">
                   <button
@@ -919,6 +931,74 @@ export function LibraryTable({ library }: LibraryTableProps) {
                       </td>
                     );
                   })}
+
+                  {/* Dossier Sections cell */}
+                  <td
+                    className="align-top"
+                    onClick={() => {
+                      setEditingDossierArt(article.id);
+                      setDossierSecInput('');
+                      setTimeout(() => dossierSecInputRef.current?.focus(), 50);
+                    }}
+                  >
+                    <div className="flex flex-wrap gap-1 cursor-pointer min-h-[22px]">
+                      {((article.dossierSections as string[] | undefined) ?? []).map((sec) => (
+                        <span
+                          key={sec}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono bg-accent/10 text-accent border border-accent/20"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {sec}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const current: string[] = (article.dossierSections as string[] | undefined) ?? [];
+                              updateArticleDossierSections(library.id, article.id, current.filter((s) => s !== sec));
+                            }}
+                            className="hover:text-exclude transition-colors ml-0.5"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                      {editingDossierArt === article.id ? (
+                        <input
+                          ref={dossierSecInputRef}
+                          value={dossierSecInput}
+                          onChange={(e) => setDossierSecInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && dossierSecInput.trim()) {
+                              e.preventDefault();
+                              const current: string[] = (article.dossierSections as string[] | undefined) ?? [];
+                              if (!current.includes(dossierSecInput.trim())) {
+                                updateArticleDossierSections(library.id, article.id, [...current, dossierSecInput.trim()]);
+                              }
+                              setDossierSecInput('');
+                            }
+                            if (e.key === 'Escape') {
+                              setEditingDossierArt(null);
+                              setDossierSecInput('');
+                            }
+                          }}
+                          onBlur={() => {
+                            if (dossierSecInput.trim()) {
+                              const current: string[] = (article.dossierSections as string[] | undefined) ?? [];
+                              if (!current.includes(dossierSecInput.trim())) {
+                                updateArticleDossierSections(library.id, article.id, [...current, dossierSecInput.trim()]);
+                              }
+                            }
+                            setEditingDossierArt(null);
+                            setDossierSecInput('');
+                          }}
+                          placeholder="e.g. 4.1"
+                          className="text-[10px] font-mono w-14 bg-transparent border-b border-accent outline-none text-accent placeholder:text-muted-foreground/40"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/30 italic">+ tag</span>
+                      )}
+                    </div>
+                  </td>
 
                   {adminMode && <td />}
                 </tr>

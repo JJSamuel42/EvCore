@@ -228,6 +228,51 @@ export interface CountryData {
 }
 
 // ============================================================
+// Dossier Builder Types
+// ============================================================
+export type DossierGenerateType = 'text' | 'table' | 'visual';
+
+export interface DossierSection {
+  id: string;
+  outlineNumber: string; // e.g. "1", "1.2", "1.2.3"
+  title: string;
+  level: number; // 1–4
+  parentId: string | null;
+  guidanceNotes: string[]; // bullet points
+  order: number;
+}
+
+export interface DossierSectionVersion {
+  id: string;
+  content: string;
+  type: DossierGenerateType;
+  prompt: string;
+  savedAt: string;
+}
+
+export interface DossierSectionContent {
+  currentDraft: string;
+  currentType: DossierGenerateType;
+  aiReasoning: string;
+  extractedData: string;
+  versions: DossierSectionVersion[]; // max 3
+  isGenerating: boolean;
+  additionalPrompt: string;
+}
+
+export interface Dossier {
+  id: string;
+  name: string;
+  product: string;
+  indication: string;
+  libraryId: string;
+  sections: DossierSection[];
+  sectionContents: Record<string, DossierSectionContent>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
 // Shared
 // ============================================================
 export interface SelectOption {

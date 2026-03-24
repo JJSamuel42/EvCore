@@ -32,6 +32,7 @@ interface LibraryState {
   deleteColumn: (libraryId: string, columnId: string) => void;
   addArticle: (libraryId: string, article: Omit<LibraryArticle, 'id' | 'articleNumber'>) => void;
   updateArticle: (libraryId: string, articleId: string, data: Partial<LibraryArticle>) => void;
+  updateArticleDossierSections: (libraryId: string, articleId: string, sections: string[]) => void;
   deleteArticle: (libraryId: string, articleId: string) => void;
   setActiveLibrary: (id: string | null) => void;
 }
@@ -188,6 +189,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Dupilumab significantly improved all primary and secondary endpoints vs placebo. IGA 0/1 achieved in 36-38% vs 8-10% placebo. EASI-75 in 44-52% vs 12-15%.',
         'col-default-10': '16 weeks',
         'col-default-11': '1L',
+        dossierSections: ['4.1', '4.1.1'],
       },
       {
         id: 'art-2',
@@ -210,6 +212,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Pooled analysis confirmed superiority of dupilumab across all efficacy endpoints. NNT for IGA 0/1 was 3.6.',
         'col-default-10': '52 weeks',
         'col-default-11': '1L',
+        dossierSections: ['4.1', '4.1.1'],
       },
       {
         id: 'art-3',
@@ -232,6 +235,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Real-world data confirmed effectiveness consistent with clinical trials. EASI-75 achieved in 61% at 16 weeks.',
         'col-default-10': '16-52 weeks',
         'col-default-11': '1L',
+        dossierSections: ['4.3'],
       },
       {
         id: 'art-4',
@@ -254,6 +258,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Dupilumab demonstrated cost-effectiveness at £30,000/QALY threshold for patients with moderate-to-severe AD who failed conventional therapy.',
         'col-default-10': 'Lifetime',
         'col-default-11': '2L',
+        dossierSections: ['6.1'],
       },
       {
         id: 'art-5',
@@ -276,6 +281,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Dupilumab significantly improved quality of life, anxiety/depression scores, and sleep quality vs placebo + TCS at week 52.',
         'col-default-10': '52 weeks',
         'col-default-11': '1L',
+        dossierSections: ['4.1', '4.1.2'],
       },
       {
         id: 'art-6',
@@ -298,6 +304,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Long-term safety profile favorable. Most common TEAEs: conjunctivitis (13.6%), injection site reactions (5.2%). No increase in serious infections.',
         'col-default-10': 'Up to 3 years',
         'col-default-11': '1L',
+        dossierSections: ['5.1'],
       },
       {
         id: 'art-7',
@@ -320,6 +327,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Budget impact of dupilumab formulary inclusion estimated at $0.27 PMPM increase. Offset by reduced healthcare resource utilization.',
         'col-default-10': '5 years',
         'col-default-11': '2L',
+        dossierSections: ['6.2'],
       },
       {
         id: 'art-8',
@@ -342,6 +350,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'AD prevalence in US adults: 7.3%. Moderate-severe AD: 40% of cases. Significant burden on QoL and work productivity.',
         'col-default-10': 'Cross-sectional',
         'col-default-11': 'Not Applicable',
+        dossierSections: ['2.1'],
       },
       {
         id: 'art-9',
@@ -364,6 +373,7 @@ const INITIAL_LIBRARIES: Library[] = [
         'col-default-9': 'Dupilumab demonstrated superior outcomes vs conventional immunosuppressants at 16 and 52 weeks in real-world setting.',
         'col-default-10': '52 weeks',
         'col-default-11': '2L',
+        dossierSections: ['4.2', '4.3'],
       },
     ],
   },
@@ -692,6 +702,22 @@ export const useLibraryStore = create<LibraryState>()(
         }));
       },
 
+      updateArticleDossierSections: (libraryId, articleId, sections) => {
+        set((state) => ({
+          libraries: state.libraries.map((lib) =>
+            lib.id === libraryId
+              ? {
+                  ...lib,
+                  articles: lib.articles.map((art) =>
+                    art.id === articleId ? { ...art, dossierSections: sections } : art
+                  ),
+                  updatedAt: new Date().toISOString(),
+                }
+              : lib
+          ),
+        }));
+      },
+
       deleteArticle: (libraryId, articleId) => {
         set((state) => ({
           libraries: state.libraries.map((lib) =>
@@ -713,15 +739,38 @@ export const useLibraryStore = create<LibraryState>()(
     }),
     {
       name: 'ehcore-libraries',
-      version: 2,
+      version: 3,
       migrate: (persistedState: any, version: number) => {
+        const state = persistedState as { libraries?: any[] };
         if (version < 2) {
           // Backfill categoryHierarchy on libraries that predate this field
-          const state = persistedState as { libraries?: any[] };
           if (Array.isArray(state.libraries)) {
             state.libraries = state.libraries.map((lib: any) => ({
               ...lib,
               categoryHierarchy: lib.categoryHierarchy ?? DEFAULT_CATEGORY_HIERARCHY.map((n) => ({ ...n })),
+            }));
+          }
+        }
+        if (version < 3) {
+          // Seed dossierSections on known Dupixent articles
+          const SEED: Record<string, string[]> = {
+            'art-1': ['4.1', '4.1.1'],
+            'art-2': ['4.1', '4.1.1'],
+            'art-3': ['4.3'],
+            'art-4': ['6.1'],
+            'art-5': ['4.1', '4.1.2'],
+            'art-6': ['5.1'],
+            'art-7': ['6.2'],
+            'art-8': ['2.1'],
+            'art-9': ['4.2', '4.3'],
+          };
+          if (Array.isArray(state.libraries)) {
+            state.libraries = state.libraries.map((lib: any) => ({
+              ...lib,
+              articles: (lib.articles ?? []).map((art: any) => ({
+                ...art,
+                dossierSections: art.dossierSections ?? SEED[art.id] ?? [],
+              })),
             }));
           }
         }

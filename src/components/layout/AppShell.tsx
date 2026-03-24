@@ -35,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Lit Search', href: '/lit-search', icon: <Search className="w-4 h-4" /> },
   { label: 'Patient Funnels', href: '/patient-funnels', icon: <TrendingDown className="w-4 h-4" /> },
   { label: 'Dashboard', href: '/dashboard', icon: <BarChart2 className="w-4 h-4" />, disabled: true, badge: 'Soon' },
-  { label: 'Dossier Builder', href: '/dossier', icon: <FileText className="w-4 h-4" />, disabled: true, badge: 'Soon' },
+  { label: 'Dossier Builder', href: '/dossier', icon: <FileText className="w-4 h-4" /> },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -55,6 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (href === '/libraries') return pathname.startsWith('/libraries');
     if (href === '/lit-search') return pathname.startsWith('/lit-search');
     if (href === '/patient-funnels') return pathname.startsWith('/patient-funnels');
+    if (href === '/dossier') return pathname.startsWith('/dossier');
     return pathname === href;
   };
 

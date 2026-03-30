@@ -16,6 +16,8 @@ import {
   ChevronRight,
   AlertTriangle,
   Layers,
+  Loader2,
+  DatabaseZap,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { AppShell } from '@/components/layout/AppShell';
@@ -396,13 +398,42 @@ export default function LitSearchSessionPage() {
                 )}
               </div>
 
+              {/* Searching indicator */}
+              {isSearching && (
+                <div className="flex flex-col items-center justify-center gap-3 py-14 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <DatabaseZap className="w-4 h-4" />
+                    Querying PubMed…
+                  </div>
+                  <p className="text-xs">Searching across millions of articles. This may take a few seconds.</p>
+                </div>
+              )}
+
+              {/* No results state */}
+              {!isSearching && session.lastRun && session.results.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 py-14 text-muted-foreground">
+                  <Search className="w-8 h-8 opacity-30" />
+                  <p className="text-sm font-medium">No results found on PubMed</p>
+                  <p className="text-xs">Try broadening your search terms or adjusting filters.</p>
+                </div>
+              )}
+
               {/* Results Table */}
-              {session.results.length > 0 && (
+              {!isSearching && session.results.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <SectionLabel>
-                      Results — showing {session.results.length.toLocaleString()} of {(session.totalHits ?? session.results.length).toLocaleString()} hits on PubMed
-                    </SectionLabel>
+                    <div className="flex items-center gap-3">
+                      <SectionLabel>
+                        Results — showing {session.results.length.toLocaleString()} loaded
+                      </SectionLabel>
+                      {session.totalHits != null && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-accent/10 text-accent border border-accent/20">
+                          <DatabaseZap className="w-3 h-3" />
+                          {session.totalHits.toLocaleString()} hits on PubMed
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="overflow-auto rounded-lg border border-border">

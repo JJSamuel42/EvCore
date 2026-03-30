@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { SearchSession, SearchTerm, PubMedFilters, SearchResult, LitSearchState } from '@/types';
-import { fetchArticlesByPMID } from '@/lib/pubmed';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -12,9 +11,9 @@ function buildPubMedQuery(terms: SearchTerm[]): string {
   let query = '';
   terms.forEach((term, idx) => {
     if (idx === 0) {
-      query += `"${term.text}"[MeSH Terms]`;
+      query += `"${term.text}"[Title/Abstract]`;
     } else {
-      query += ` ${term.operator || 'AND'} "${term.text}"[MeSH Terms]`;
+      query += ` ${term.operator || 'AND'} "${term.text}"[Title/Abstract]`;
     }
   });
   return query;
@@ -550,25 +549,23 @@ export const useLitSearchStore = create<LitSearchState>()(
           : session.query;
 
         try {
-          // Step 1: esearch to get PMIDs and total count
-          const esearchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(fullQuery)}&retmax=${PAGE_SIZE}&retstart=${retstart}&retmode=json`;
-          const esearchRes = await fetch(esearchUrl);
-          if (!esearchRes.ok) throw new Error(`PubMed esearch error: ${esearchRes.status}`);
-          const esearchData = await esearchRes.json();
+          // Route through our Next.js API proxy to avoid CORS issues
+          const proxyUrl = `/api/pubmed/search?query=${encodeURIComponent(fullQuery)}&retmax=${PAGE_SIZE}&retstart=${retstart}`;
+          const res = await fetch(proxyUrl);
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error ?? `Search failed: ${res.status}`);
+          }
+          const data = await res.json();
+          const totalHits: number = data.totalHits ?? 0;
 
-          const pmids: string[] = esearchData.esearchresult?.idlist ?? [];
-          const totalHits = parseInt(esearchData.esearchresult?.count ?? '0', 10);
-
-          // Step 2: efetch to get article details
-          const articles = pmids.length > 0 ? await fetchArticlesByPMID(pmids) : [];
-
-          const pageResults: SearchResult[] = articles.map((a) => ({
+          const pageResults: SearchResult[] = (data.articles ?? []).map((a: any) => ({
             pmid: a.pmid,
             title: a.title,
             authors: a.authors,
             journal: a.journal,
-            pubDate: a.publicationDate,
-            link: a.publicationLink,
+            pubDate: a.pubDate,
+            link: a.link,
             abstract: a.abstract,
             decision: null,
             rationale: '',
@@ -590,14 +587,6 @@ export const useLitSearchStore = create<LitSearchState>()(
             ),
           }));
         } catch (err) {
-          // On API failure, surface the error via totalHits = -1 so the UI can show an error state
-          set((state) => ({
-            sessions: state.sessions.map((s) =>
-              s.id === sessionId
-                ? { ...s, totalHits: -1, lastRun: new Date().toISOString() }
-                : s
-            ),
-          }));
           throw err;
         }
       },

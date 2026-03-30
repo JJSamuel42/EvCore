@@ -104,6 +104,7 @@ export interface LibraryArticle {
   journal: string;
   publicationDate: string;
   publicationLink: string;
+  pdfData?: string;        // base64 data URL of uploaded PDF
   _cellMeta?: Record<string, CellMeta>;
   [key: string]: any;
 }

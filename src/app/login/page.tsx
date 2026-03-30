@@ -42,16 +42,6 @@ export default function LoginPage() {
     }
   };
 
-  const fillDemo = (role: 'admin' | 'researcher' | 'viewer') => {
-    const creds = {
-      admin: { email: 'admin@ehcore.com', password: 'admin123' },
-      researcher: { email: 'researcher1@ehcore.com', password: 'research123' },
-      viewer: { email: 'viewer@ehcore.com', password: 'view123' },
-    };
-    setEmail(creds[role].email);
-    setPassword(creds[role].password);
-    setError('');
-  };
 
   return (
     <div className="min-h-screen flex">
@@ -210,37 +200,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo accounts */}
-          <div className="mt-8">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                Demo Accounts
-              </span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { role: 'admin', label: 'Admin', desc: 'Full access' },
-                  { role: 'researcher', label: 'Researcher', desc: 'Edit access' },
-                  { role: 'viewer', label: 'Viewer', desc: 'Read only' },
-                ] as const
-              ).map(({ role, label, desc }) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => fillDemo(role)}
-                  className="p-2.5 text-left border border-border rounded-md hover:border-accent/40 hover:bg-accent-muted transition-colors group"
-                >
-                  <p className="text-[11px] font-mono font-medium text-foreground group-hover:text-accent">
-                    {label}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{desc}</p>
-                </button>
-              ))}
-            </div>
-          </div>
 
           <p className="mt-6 text-center text-[11px] text-muted-foreground/60">
             EHCore v1.0 · For authorized users only

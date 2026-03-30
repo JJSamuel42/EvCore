@@ -135,6 +135,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    table-layout: fixed;
   }
 
   .data-table th {
@@ -156,6 +157,8 @@
     border-bottom: 1px solid var(--border);
     vertical-align: top;
     color: var(--foreground);
+    max-width: 0;          /* required for overflow:hidden to work in table cells */
+    overflow: hidden;
   }
 
   .data-table tbody tr:hover {

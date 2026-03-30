@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Edit2, Shield, UserX, UserCheck, Key } from 'lucide-react';
+import { Plus, Edit2, UserX, UserCheck } from 'lucide-react';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
@@ -63,7 +63,9 @@ export default function AdminPage() {
   const handleSubmit = () => {
     if (!validateForm()) return;
     if (editingUser) {
-      updateUser(editingUser.id, { name: form.name, email: form.email, role: form.role });
+      const updates: Parameters<typeof updateUser>[1] = { name: form.name, email: form.email, role: form.role };
+      if (form.password.trim()) updates.password = form.password.trim();
+      updateUser(editingUser.id, updates);
     } else {
       addUser({ name: form.name, email: form.email, role: form.role, active: true, password: form.password });
     }
@@ -160,12 +162,6 @@ export default function AdminPage() {
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            className="p-1 text-muted-foreground hover:text-accent transition-colors"
-                            title="Reset password"
-                          >
-                            <Key className="w-3.5 h-3.5" />
-                          </button>
                           {u.id !== currentUser?.id && (
                             <button
                               onClick={() => {
@@ -218,17 +214,15 @@ export default function AdminPage() {
                 onValueChange={(v) => setForm((p) => ({ ...p, role: v as UserRole }))}
                 options={ROLE_OPTIONS}
               />
-              {!editingUser && (
-                <Input
-                  label="Initial Password"
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-                  placeholder="••••••••"
-                  error={formErrors.password}
-                  hint="User should change this on first login."
-                />
-              )}
+              <Input
+                label={editingUser ? 'New Password (leave blank to keep current)' : 'Initial Password'}
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                placeholder="••••••••"
+                error={formErrors.password}
+                hint={editingUser ? undefined : 'User should change this after first login.'}
+              />
 
               <div className="flex justify-end gap-2 pt-2">
                 <DialogClose asChild>

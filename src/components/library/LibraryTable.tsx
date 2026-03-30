@@ -22,6 +22,7 @@ import {
   EyeOff,
   Trash2,
   ShieldCheck,
+  FileText,
 } from 'lucide-react';
 import { Library, LibraryArticle, LibraryColumn, SortState, DateQuickAction, CategoryNode } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -914,6 +915,17 @@ export function LibraryTable({ library }: LibraryTableProps) {
                 <tr
                   key={article.id}
                   className={cn('transition-colors', selectedIds.has(article.id) && 'bg-accent-muted')}
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('bg-accent/10'); }}
+                  onDragLeave={(e) => e.currentTarget.classList.remove('bg-accent/10')}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('bg-accent/10');
+                    const file = Array.from(e.dataTransfer.files).find((f) => f.type === 'application/pdf');
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => updateArticle(library.id, article.id, { pdfData: reader.result as string });
+                    reader.readAsDataURL(file);
+                  }}
                 >
                   <td>
                     <input
@@ -928,16 +940,53 @@ export function LibraryTable({ library }: LibraryTableProps) {
                   )}
                   {!hiddenCols.has('pmid') && (
                     <td>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
                         <a
                           href={article.publicationLink}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs text-accent hover:underline font-mono"
+                          title="Open article in PubMed"
                         >
                           {article.pmid}
                         </a>
                         <ExternalLink className="w-2.5 h-2.5 text-muted-foreground" />
+                        {/* PDF button */}
+                        {article.pdfData ? (
+                          <a
+                            href={article.pdfData}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open PDF"
+                            className="ml-0.5 flex items-center gap-0.5 text-[10px] font-mono text-exclude hover:text-exclude/80 border border-exclude/30 rounded px-1 py-0.5 leading-none"
+                          >
+                            <FileText className="w-2.5 h-2.5" />
+                            PDF
+                          </a>
+                        ) : (
+                          <label
+                            title="Upload PDF"
+                            className="ml-0.5 flex items-center gap-0.5 text-[10px] font-mono text-muted-foreground/50 hover:text-muted-foreground border border-dashed border-border hover:border-muted-foreground rounded px-1 py-0.5 leading-none cursor-pointer transition-colors"
+                          >
+                            <FileText className="w-2.5 h-2.5" />
+                            PDF
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  updateArticle(library.id, article.id, { pdfData: reader.result as string });
+                                };
+                                reader.readAsDataURL(file);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        )}
                       </div>
                     </td>
                   )}

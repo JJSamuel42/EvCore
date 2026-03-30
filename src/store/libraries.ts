@@ -801,29 +801,45 @@ export const useLibraryStore = create<LibraryState>()(
                     const matched = val !== 'Nonspecific';
                     cellMeta[col.id] = { confidence: matched ? 90 : 50, reasoning: matched ? 'Keyword match in title/abstract' : 'No product keyword found; defaulted to Nonspecific', sourceSnippet: art.title.substring(0, 120) };
                   } else if (colName === 'indication') {
-                    const val = inferText(textBlob, INDICATION_KEYWORDS, '—');
+                    const val = inferText(textBlob, INDICATION_KEYWORDS, '');
                     updates[col.id] = val;
-                    const matched = val !== '—';
-                    cellMeta[col.id] = { confidence: matched ? 88 : 45, reasoning: matched ? 'Indication keyword matched in title/abstract' : 'No indication keyword found', sourceSnippet: art.title.substring(0, 120) };
+                    cellMeta[col.id] = val
+                      ? { confidence: 88, reasoning: 'Indication keyword matched in title/abstract', sourceSnippet: art.title.substring(0, 120) }
+                      : { confidence: 0, reasoning: 'No indication keyword found — manual selection required', sourceSnippet: '' };
                   } else if (colName === 'study sponsor') {
-                    const val = inferText(textBlob, SPONSOR_KEYWORDS, 'Academia');
-                    updates[col.id] = val;
-                    cellMeta[col.id] = { confidence: val === 'Academia' ? 55 : 82, reasoning: val === 'Academia' ? 'No sponsor keyword found; defaulted to Academia' : 'Sponsor keyword detected in text', sourceSnippet: '' };
+                    const val = inferText(textBlob, SPONSOR_KEYWORDS, '');
+                    if (val) {
+                      updates[col.id] = val;
+                      cellMeta[col.id] = { confidence: 82, reasoning: 'Sponsor keyword detected in text', sourceSnippet: '' };
+                    } else {
+                      updates[col.id] = '';
+                      cellMeta[col.id] = { confidence: 0, reasoning: 'No sponsor keyword found — manual review required', sourceSnippet: '' };
+                    }
                   } else if (colName === 'geography') {
-                    const val = inferText(textBlob, GEOGRAPHY_KEYWORDS, 'Global');
-                    updates[col.id] = val;
-                    cellMeta[col.id] = { confidence: 75, reasoning: 'Geography inferred from text keywords', sourceSnippet: '' };
+                    const val = inferText(textBlob, GEOGRAPHY_KEYWORDS, '');
+                    if (val) {
+                      updates[col.id] = val;
+                      cellMeta[col.id] = { confidence: 78, reasoning: 'Geography inferred from text keywords', sourceSnippet: '' };
+                    } else {
+                      updates[col.id] = '';
+                      cellMeta[col.id] = { confidence: 0, reasoning: 'No geography keyword found — manual review required', sourceSnippet: '' };
+                    }
                   } else if (col.type === 'select' && col.predefinedValues?.length) {
                     const match = col.predefinedValues.find((v) => textBlob.includes(v.toLowerCase()));
-                    updates[col.id] = match ?? col.predefinedValues[0];
-                    cellMeta[col.id] = { confidence: match ? 85 : 45, reasoning: match ? `Matched predefined value "${match}" in text` : `No match found; defaulted to first option`, sourceSnippet: '' };
+                    updates[col.id] = match ?? '';
+                    cellMeta[col.id] = match
+                      ? { confidence: 85, reasoning: `Matched predefined value "${match}" in text`, sourceSnippet: '' }
+                      : { confidence: 0, reasoning: 'No predefined value matched in text — manual selection required', sourceSnippet: '' };
                   } else if (col.type === 'number') {
                     const nMatch = textBlob.match(/n\s*=\s*(\d+)/);
-                    updates[col.id] = nMatch ? parseInt(nMatch[1]) : null;
-                    cellMeta[col.id] = { confidence: nMatch ? 78 : 30, reasoning: nMatch ? `Extracted n=${nMatch[1]} from text` : 'No numeric pattern found', sourceSnippet: nMatch ? nMatch[0] : '' };
+                    updates[col.id] = nMatch ? parseInt(nMatch[1]) : '';
+                    cellMeta[col.id] = nMatch
+                      ? { confidence: 78, reasoning: `Extracted n=${nMatch[1]} from text`, sourceSnippet: nMatch[0] }
+                      : { confidence: 0, reasoning: 'No numeric pattern found', sourceSnippet: '' };
                   } else if (col.type === 'text' && col.aiPrompt) {
-                    updates[col.id] = '(AI extracted — review required)';
-                    cellMeta[col.id] = { confidence: 50, reasoning: 'Placeholder text — full AI extraction required', sourceSnippet: '' };
+                    // Leave empty — red ! will signal needs review
+                    updates[col.id] = '';
+                    cellMeta[col.id] = { confidence: 0, reasoning: 'Full AI extraction required — paste abstract to process', sourceSnippet: '' };
                   }
                 }
                 return { ...art, ...updates, _cellMeta: cellMeta };

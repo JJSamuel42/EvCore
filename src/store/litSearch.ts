@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { SearchSession, SearchTerm, PubMedFilters, SearchResult, LitSearchState } from '@/types';
+import { fetchArticlesByPMID } from '@/lib/pubmed';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -528,40 +529,77 @@ export const useLitSearchStore = create<LitSearchState>()(
 
       runSearch: async (sessionId, page = 1) => {
         const session = get().sessions.find((s) => s.id === sessionId);
-        if (!session) return;
-
-        // Simulate PubMed API call with realistic hit count
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (!session || !session.query) return;
 
         const PAGE_SIZE = 25;
-        const start = (page - 1) * PAGE_SIZE;
-        // Cycle through MOCK_ABSTRACTS to fill pages (wraps around for demo)
-        const pageResults: SearchResult[] = Array.from({ length: PAGE_SIZE }, (_, i) => {
-          const src = MOCK_ABSTRACTS[(start + i) % MOCK_ABSTRACTS.length];
-          // Make PMIDs unique per page/position when cycling
-          return {
-            ...src,
-            pmid: page === 1 ? src.pmid : `${src.pmid}-p${page}-${i}`,
+        const retstart = (page - 1) * PAGE_SIZE;
+
+        // Build filter params
+        const filters = session.filters ?? {};
+        const filterParts: string[] = [];
+        if (filters.dateFrom || filters.dateTo) {
+          const from = filters.dateFrom ? filters.dateFrom.replace(/-/g, '/') : '1900/01/01';
+          const to = filters.dateTo ? filters.dateTo.replace(/-/g, '/') : '3000/12/31';
+          filterParts.push(`${from}:${to}[dp]`);
+        }
+        if (filters.species === 'human') filterParts.push('"humans"[MeSH Terms]');
+        if (filters.language) filterParts.push(`${filters.language}[lang]`);
+
+        const fullQuery = filterParts.length > 0
+          ? `(${session.query}) AND ${filterParts.join(' AND ')}`
+          : session.query;
+
+        try {
+          // Step 1: esearch to get PMIDs and total count
+          const esearchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(fullQuery)}&retmax=${PAGE_SIZE}&retstart=${retstart}&retmode=json`;
+          const esearchRes = await fetch(esearchUrl);
+          if (!esearchRes.ok) throw new Error(`PubMed esearch error: ${esearchRes.status}`);
+          const esearchData = await esearchRes.json();
+
+          const pmids: string[] = esearchData.esearchresult?.idlist ?? [];
+          const totalHits = parseInt(esearchData.esearchresult?.count ?? '0', 10);
+
+          // Step 2: efetch to get article details
+          const articles = pmids.length > 0 ? await fetchArticlesByPMID(pmids) : [];
+
+          const pageResults: SearchResult[] = articles.map((a) => ({
+            pmid: a.pmid,
+            title: a.title,
+            authors: a.authors,
+            journal: a.journal,
+            pubDate: a.publicationDate,
+            link: a.publicationLink,
+            abstract: a.abstract,
             decision: null,
             rationale: '',
             aiReasoning: '',
-          };
-        });
+          }));
 
-        const prevResults = page === 1 ? [] : (session.results ?? []);
+          const prevResults = page === 1 ? [] : (session.results ?? []);
 
-        set((state) => ({
-          sessions: state.sessions.map((s) =>
-            s.id === sessionId
-              ? {
-                  ...s,
-                  results: [...prevResults, ...pageResults],
-                  totalHits: SIMULATED_TOTAL_HITS,
-                  lastRun: new Date().toISOString(),
-                }
-              : s
-          ),
-        }));
+          set((state) => ({
+            sessions: state.sessions.map((s) =>
+              s.id === sessionId
+                ? {
+                    ...s,
+                    results: [...prevResults, ...pageResults],
+                    totalHits,
+                    lastRun: new Date().toISOString(),
+                  }
+                : s
+            ),
+          }));
+        } catch (err) {
+          // On API failure, surface the error via totalHits = -1 so the UI can show an error state
+          set((state) => ({
+            sessions: state.sessions.map((s) =>
+              s.id === sessionId
+                ? { ...s, totalHits: -1, lastRun: new Date().toISOString() }
+                : s
+            ),
+          }));
+          throw err;
+        }
       },
 
       runAIReview: async (sessionId) => {

@@ -49,6 +49,7 @@ export default function LitSearchSessionPage() {
   const session = sessions.find((s) => s.id === id);
 
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [abstractResult, setAbstractResult] = useState<SearchResult | null>(null);
@@ -84,9 +85,12 @@ export default function LitSearchSessionPage() {
 
   const handleRunSearch = async () => {
     setIsSearching(true);
+    setSearchError(null);
     setResultsPage(1);
     try {
       await runSearch(session.id, 1);
+    } catch {
+      setSearchError('Failed to reach PubMed. Check your internet connection and try again.');
     } finally {
       setIsSearching(false);
     }
@@ -350,6 +354,13 @@ export default function LitSearchSessionPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Search error */}
+              {searchError && (
+                <div className="mb-3 px-4 py-2 bg-exclude-bg border border-exclude/20 rounded-md text-sm text-exclude">
+                  {searchError}
+                </div>
+              )}
 
               {/* Action buttons */}
               <div className="flex items-center gap-3">

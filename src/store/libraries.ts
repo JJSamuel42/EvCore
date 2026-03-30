@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Library, LibraryColumn, LibraryArticle, DateQuickAction, CategoryNode } from '@/types';
+import { Library, LibraryColumn, LibraryArticle, DateQuickAction, CategoryNode, CellMeta } from '@/types';
 
 const DEFAULT_QUICK_ACTIONS: DateQuickAction[] = [
   { id: 'q1', label: 'Last 3 months', type: 'relative_months', months: 3 },
@@ -22,7 +22,7 @@ export const DEFAULT_CATEGORY_HIERARCHY: CategoryNode[] = [
 interface LibraryState {
   libraries: Library[];
   activeLibraryId: string | null;
-  createLibrary: (data: { name: string; innName: string; indications: string[]; description: string }) => Library;
+  createLibrary: (data: { name: string; innName: string; indications: string[]; description: string; columns?: LibraryColumn[]; categoryHierarchy?: CategoryNode[] }) => Library;
   updateLibrary: (id: string, data: Partial<Library>) => void;
   updateDateQuickActions: (libraryId: string, actions: DateQuickAction[]) => void;
   updateCategoryHierarchy: (libraryId: string, hierarchy: CategoryNode[]) => void;
@@ -38,21 +38,59 @@ interface LibraryState {
   setActiveLibrary: (id: string | null) => void;
 }
 
-const DEFAULT_COLUMNS: Omit<LibraryColumn, 'id' | 'order'>[] = [
+export const DEFAULT_COLUMNS: Omit<LibraryColumn, 'id' | 'order'>[] = [
   {
     name: 'Product',
-    description: 'Brand name or product studied',
-    type: 'text',
+    description: 'Key product article reports on',
+    type: 'select',
+    predefinedValues: [],
     isFilter: true,
-    aiPrompt: 'Extract the product or drug name being studied in this article.',
+    aiPrompt: 'Based on the main reported product(s) in the article assign a Brand name (INN name); for example if it\'s a clinical trial of Product X vs chemotherapy, consider Product X. Publications may only report the INN name. Cross-reference with input brand names to see which to apply. If more than one product is reported on, use "Multiple". If no specific product is mentioned, then use "Nonspecific".',
     isDefault: true,
   },
   {
     name: 'Indication',
-    description: 'Disease or condition studied',
-    type: 'text',
+    description: 'Indications reported on',
+    type: 'select',
+    predefinedValues: [],
     isFilter: true,
-    aiPrompt: 'Extract the primary indication or disease being studied.',
+    aiPrompt: 'Based on the indication reported on, assign an indication tag, which a user will predefine.',
+    isDefault: true,
+  },
+  {
+    name: 'Publication Type',
+    description: 'Type of publication',
+    type: 'select',
+    predefinedValues: ['Manuscript', 'Conference', 'HTA / Regulatory', 'Data-on-File', 'Press Release', 'Other'],
+    isFilter: true,
+    aiPrompt: 'There are 6 options: Manuscript, Conference, HTA / Regulatory, Data-on-File, Press Release, Other. Apply Manuscript if it\'s a full-text article; Conference if its an abstract from a conference or congress; HTA / Regulatory for HTA reports or regulatory documents such as FDA patient information leaflets or SmPCs; Data-on-file if its an internal document; Press-release to news articles or investor reports, and Other for everything else.',
+    isDefault: true,
+  },
+  {
+    name: 'Study Type',
+    description: 'Type of study generating the relevant data',
+    type: 'select',
+    predefinedValues: ['Clinical', 'Extension', 'Real-World', 'SLR / TLR', 'NMA / ITCs', 'Economic', 'Other'],
+    isFilter: true,
+    aiPrompt: 'There are 7 options: Clinical, Extension, Real-World, SLR / TLR, NMA / ITCs, Economic, Other. Apply Clinical for all clinical studies from randomised clinical trials to open-label studies, or post-hoc analysis on data generated from a clinical study or setting. Extension studies for those that are extensions to either a Phase II or Phase III clinical trial. Real World for studies reporting on real-world use including registry studies, claims database analysis or retrospective medical/hospital record analysis. SLR / TLR for systematic or targeted literature reviews; NMA / ITCs for reviews with meta-analyses or indirect treatment comparisons for the specified indication. Economic for articles reporting on healthcare resource utilisation, cost effectiveness, cost utility, or budget impact of a product. Apply Other for all others, particularly to articles on endpoint or PRO instrument development, psychometric validation (incl. focus groups, qualitative studies, social listening, etc.)',
+    isDefault: true,
+  },
+  {
+    name: 'Study Sponsor',
+    description: 'Sponsor of the study',
+    type: 'select',
+    predefinedValues: ['Industry', 'Academia'],
+    isFilter: true,
+    aiPrompt: '2 options: Industry or Academia. Need to determine who the key sponsor is based on whats mentioned in the acknowledgements whether is sponsored by a Pharmaceutical or biotech company (Industry) or whether its done without industry funding (Academia).',
+    isDefault: true,
+  },
+  {
+    name: 'Geography',
+    description: 'Geography of the study and reported data',
+    type: 'select',
+    predefinedValues: ['Global', 'United States', 'Canada', 'UK', 'France', 'Germany', 'Italy', 'Spain', 'Western Europe', 'LatAm', 'MENA', 'APAC'],
+    isFilter: true,
+    aiPrompt: 'Identify countries or regions from where participants in the study were included. Global (if more than 2 countries across 2 continents), named countries like United States, Canada, UK, France, etc. Can generalise to regions like Western Europe, LatAm, MENA (Middle East & North Africa) or APAC if more than 2 countries from the respective regions are reported on.',
     isDefault: true,
   },
   {
@@ -61,7 +99,7 @@ const DEFAULT_COLUMNS: Omit<LibraryColumn, 'id' | 'order'>[] = [
     type: 'select',
     predefinedValues: DEFAULT_CATEGORY_HIERARCHY.map((n) => n.category),
     isFilter: true,
-    aiPrompt: 'Classify this article into one of the following categories: Disease Burden – Clinical, Disease Burden – Humanistic, Disease Burden – Socioeconomic, Management, Product specific, Efficacy / effectiveness, Safety, Economic value.',
+    aiPrompt: 'Classify each article into one of the following categories based on what is reported (i.e. in results and conclusion sections) rather than what is mentioned: Disease Burden – Clinical, Disease Burden – Humanistic, Disease Burden – Socioeconomic, Management, Product specific, Efficacy / effectiveness, Safety, Economic value.',
     isDefault: true,
   },
   {
@@ -70,80 +108,44 @@ const DEFAULT_COLUMNS: Omit<LibraryColumn, 'id' | 'order'>[] = [
     type: 'select',
     predefinedValues: DEFAULT_CATEGORY_HIERARCHY.flatMap((n) => n.subcategories),
     isFilter: true,
-    aiPrompt: 'Classify this article subcategory. Options include: Epidemiology, Morbidity / mortality, Caregiver impact, Patient insight, PROs, Direct costs, Indirect costs, Health resource utilisation, Productivity impact, Societal burden, Guidelines / recommendations, Treatment patterns, HTA reports, Mechanism of action, Dosing / utilisation, Regulatory, Pivotal study, Clinical efficacy / effectiveness, Comparative effectiveness, Clinical assessment outcomes, Safety – General, Safety – Specific, Budget impact, Cost effectiveness, HCRU / Cost of care.',
+    aiPrompt: 'Classify this article subcategory. Options are linked to Category applied and here are the options: Disease Burden – Clinical: Epidemiology, Morbidity / mortality; Disease Burden – Humanistic: Caregiver impact, Patient insight, PROs; Disease Burden – Socioeconomic: Direct costs, Indirect costs, Health resource utilisation, Caregiver impact, Productivity impact, Societal burden; Management: Guidelines / recommendations, Treatment patterns, HTA reports; Product specific: Mechanism of action, Dosing / utilisation, Regulatory, Pivotal study; Efficacy / effectiveness: Clinical efficacy / effectiveness, Comparative effectiveness, Clinical assessment outcomes; Safety: Safety – General, Safety – Specific; Economic value: Budget impact, Cost effectiveness, HCRU / Cost of care.',
     isDefault: true,
   },
   {
-    name: 'Publication Type',
-    description: 'Type of publication',
-    type: 'select',
-    predefinedValues: ['Journal Article', 'Congress Abstract', 'Poster', 'Oral Presentation', 'Review', 'Letter', 'Editorial'],
-    isFilter: true,
-    aiPrompt: 'Identify the publication type: Journal Article, Congress Abstract, Poster, Oral Presentation, Review, Letter, or Editorial.',
-    isDefault: true,
-  },
-  {
-    name: 'Study Type',
-    description: 'Methodology classification',
-    type: 'select',
-    predefinedValues: ['Randomized Controlled Trial', 'Open-Label Extension', 'Cohort Study', 'Case-Control', 'Cross-Sectional', 'Case Series', 'Modeling Study', 'Literature Review'],
-    isFilter: true,
-    aiPrompt: 'Identify the study type from: Randomized Controlled Trial, Open-Label Extension, Cohort Study, Case-Control, Cross-Sectional, Case Series, Modeling Study, Literature Review.',
-    isDefault: true,
-  },
-  {
-    name: 'Region',
-    description: 'Geographic region of study',
-    type: 'select',
-    predefinedValues: ['North America', 'Europe', 'Asia-Pacific', 'Latin America', 'Middle East', 'Global', 'Multi-Regional'],
-    isFilter: true,
-    aiPrompt: 'Identify the geographic region of the study.',
-    isDefault: true,
-  },
-  {
-    name: 'N (Patients)',
-    description: 'Number of patients enrolled',
-    type: 'number',
-    isFilter: false,
-    aiPrompt: 'Extract the total number of patients enrolled in this study.',
-    isDefault: true,
-  },
-  {
-    name: 'Primary Endpoint',
-    description: 'Primary study endpoint',
+    name: 'Study Population',
+    description: 'Specific patient population reported on',
     type: 'text',
     isFilter: false,
-    aiPrompt: 'Extract the primary endpoint or outcome measure of this study.',
+    aiPrompt: 'Extract specific patient population reported on the article. Bring as much nuance as possible to include descriptors like age, biomarkers, disease status, treatment status, etc, if mentioned.',
     isDefault: true,
   },
   {
-    name: 'Key Results',
-    description: 'Summary of key results',
+    name: 'Interventions',
+    description: 'Interventions studied and reported on',
     type: 'text',
     isFilter: false,
-    aiPrompt: 'Summarize the key results of this study in 2-3 sentences.',
+    aiPrompt: 'List all products studied and reported on in the article using INN names.',
     isDefault: true,
   },
   {
-    name: 'Follow-up Duration',
-    description: 'Duration of patient follow-up',
+    name: 'Primary Outcomes',
+    description: 'Primary objective or outcome studied in the article',
     type: 'text',
     isFilter: false,
-    aiPrompt: 'Extract the follow-up duration of this study.',
+    aiPrompt: 'Identify the key objective and primary outcome measure of the study. This would correlate with Study Type, mainly for clinical, extension, real-world, NMA / ITCs, and economic.',
     isDefault: true,
   },
   {
-    name: 'Line of Therapy',
-    description: 'Treatment line studied',
-    type: 'select',
-    predefinedValues: ['1L', '2L', '3L+', 'Maintenance', 'Adjuvant', 'Neoadjuvant', 'Not Applicable'],
-    isFilter: true,
-    aiPrompt: 'Identify the line of therapy studied: 1L, 2L, 3L+, Maintenance, Adjuvant, Neoadjuvant, or Not Applicable.',
+    name: 'Secondary Outcomes',
+    description: 'Secondary or additional objectives or outcome studied in the article',
+    type: 'text',
+    isFilter: false,
+    aiPrompt: 'Identify the secondary objectives and outcome measure of the study. This would correlate with Study Type, mainly for clinical, extension, real-world, NMA / ITCs, and economic.',
     isDefault: true,
   },
 ];
 
-function createDefaultColumns(): LibraryColumn[] {
+export function createDefaultColumns(): LibraryColumn[] {
   return DEFAULT_COLUMNS.map((col, idx) => ({
     ...col,
     id: `col-default-${idx}`,
@@ -180,16 +182,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/28892958',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Clinical efficacy / effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Randomized Controlled Trial',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 671,
-        'col-default-8': 'IGA 0/1, EASI-75 at Week 16',
-        'col-default-9': 'Dupilumab significantly improved all primary and secondary endpoints vs placebo. IGA 0/1 achieved in 36-38% vs 8-10% placebo. EASI-75 in 44-52% vs 12-15%.',
-        'col-default-10': '16 weeks',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Clinical efficacy / effectiveness',
+        'col-default-8': 'Adults with moderate-to-severe AD inadequately controlled by topical prescription medications',
+        'col-default-9': 'Dupilumab 300mg q2w, dupilumab 300mg qw, placebo',
+        'col-default-10': 'IGA 0/1, EASI-75 at Week 16',
+        'col-default-11': 'NRS itch improvement, DLQI, POEM, HADS',
         dossierSections: ['4.1', '4.1.1'],
       },
       {
@@ -203,16 +205,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/34516098',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Comparative effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Modeling Study',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 1379,
-        'col-default-8': 'IGA 0/1, EASI-75, NRS itch improvement',
-        'col-default-9': 'Pooled analysis confirmed superiority of dupilumab across all efficacy endpoints. NNT for IGA 0/1 was 3.6.',
-        'col-default-10': '52 weeks',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Comparative effectiveness',
+        'col-default-8': 'Adults with moderate-to-severe AD from two phase 3 RCTs',
+        'col-default-9': 'Dupilumab 300mg, placebo',
+        'col-default-10': 'IGA 0/1, EASI-75, NRS itch improvement',
+        'col-default-11': 'NNT analysis, subgroup analyses by baseline severity',
         dossierSections: ['4.1', '4.1.1'],
       },
       {
@@ -226,16 +228,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35879812',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Comparative effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Systematic Review',
-        'col-default-6': 'Europe',
-        'col-default-7': 4837,
-        'col-default-8': 'EASI, IGA, DLQI, POEM',
-        'col-default-9': 'Real-world data confirmed effectiveness consistent with clinical trials. EASI-75 achieved in 61% at 16 weeks.',
-        'col-default-10': '16-52 weeks',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'SLR / TLR',
+        'col-default-4': 'Academia',
+        'col-default-5': 'Global',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Comparative effectiveness',
+        'col-default-8': 'Adults with moderate-to-severe AD in real-world clinical settings',
+        'col-default-9': 'Dupilumab',
+        'col-default-10': 'EASI, IGA, DLQI, POEM',
+        'col-default-11': 'Treatment persistence, safety outcomes in real-world use',
         dossierSections: ['4.3'],
       },
       {
@@ -249,16 +251,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/31893385',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Economic value',
-        'col-default-3': 'Cost effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Modeling Study',
-        'col-default-6': 'Europe',
-        'col-default-7': null,
-        'col-default-8': 'ICER per QALY gained',
-        'col-default-9': 'Dupilumab demonstrated cost-effectiveness at £30,000/QALY threshold for patients with moderate-to-severe AD who failed conventional therapy.',
-        'col-default-10': 'Lifetime',
-        'col-default-11': '2L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Economic',
+        'col-default-4': 'Industry',
+        'col-default-5': 'UK',
+        'col-default-6': 'Economic value',
+        'col-default-7': 'Cost effectiveness',
+        'col-default-8': 'Adults with moderate-to-severe AD who failed conventional therapy',
+        'col-default-9': 'Dupilumab, best supportive care',
+        'col-default-10': 'ICER per QALY gained',
+        'col-default-11': 'Budget impact, sensitivity analyses',
         dossierSections: ['6.1'],
       },
       {
@@ -272,16 +274,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/33852137',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Disease Burden – Humanistic',
-        'col-default-3': 'PROs',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Randomized Controlled Trial',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 740,
-        'col-default-8': 'DLQI, HADS, PSQI',
-        'col-default-9': 'Dupilumab significantly improved quality of life, anxiety/depression scores, and sleep quality vs placebo + TCS at week 52.',
-        'col-default-10': '52 weeks',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Disease Burden – Humanistic',
+        'col-default-7': 'PROs',
+        'col-default-8': 'Adults with moderate-to-severe AD receiving dupilumab + TCS',
+        'col-default-9': 'Dupilumab + TCS, placebo + TCS',
+        'col-default-10': 'DLQI, HADS, PSQI',
+        'col-default-11': 'Work productivity, treatment satisfaction',
         dossierSections: ['4.1', '4.1.2'],
       },
       {
@@ -295,16 +297,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/36427004',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Safety',
-        'col-default-3': 'Safety – General',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Modeling Study',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 2932,
-        'col-default-8': 'TEAE, TRAE, SAE rates',
-        'col-default-9': 'Long-term safety profile favorable. Most common TEAEs: conjunctivitis (13.6%), injection site reactions (5.2%). No increase in serious infections.',
-        'col-default-10': 'Up to 3 years',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Safety',
+        'col-default-7': 'Safety – General',
+        'col-default-8': 'Adults with moderate-to-severe AD from 7 phase 2/3 trials',
+        'col-default-9': 'Dupilumab, placebo',
+        'col-default-10': 'TEAE, TRAE, SAE rates',
+        'col-default-11': 'Conjunctivitis, injection site reactions, serious infections',
         dossierSections: ['5.1'],
       },
       {
@@ -318,16 +320,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/34623382',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Economic value',
-        'col-default-3': 'Budget impact',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Modeling Study',
-        'col-default-6': 'North America',
-        'col-default-7': null,
-        'col-default-8': 'Total budget impact, per member per month cost',
-        'col-default-9': 'Budget impact of dupilumab formulary inclusion estimated at $0.27 PMPM increase. Offset by reduced healthcare resource utilization.',
-        'col-default-10': '5 years',
-        'col-default-11': '2L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Economic',
+        'col-default-4': 'Industry',
+        'col-default-5': 'United States',
+        'col-default-6': 'Economic value',
+        'col-default-7': 'Budget impact',
+        'col-default-8': 'US health plan population with moderate-to-severe AD',
+        'col-default-9': 'Dupilumab',
+        'col-default-10': 'Total budget impact, per member per month cost',
+        'col-default-11': 'Healthcare resource utilization offset',
         dossierSections: ['6.2'],
       },
       {
@@ -339,18 +341,18 @@ const INITIAL_LIBRARIES: Library[] = [
         journal: 'Journal of Investigative Dermatology',
         publicationDate: '2017-01-01',
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/36193423',
-        'col-default-0': 'Not Applicable',
+        'col-default-0': 'Nonspecific',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Disease Burden – Clinical',
-        'col-default-3': 'Epidemiology',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Cross-Sectional',
-        'col-default-6': 'North America',
-        'col-default-7': 34613,
-        'col-default-8': 'Prevalence, incidence, disease burden',
-        'col-default-9': 'AD prevalence in US adults: 7.3%. Moderate-severe AD: 40% of cases. Significant burden on QoL and work productivity.',
-        'col-default-10': 'Cross-sectional',
-        'col-default-11': 'Not Applicable',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Other',
+        'col-default-4': 'Academia',
+        'col-default-5': 'United States',
+        'col-default-6': 'Disease Burden – Clinical',
+        'col-default-7': 'Epidemiology',
+        'col-default-8': 'US adults from NHANES survey',
+        'col-default-9': 'Nonspecific',
+        'col-default-10': 'Prevalence, incidence, disease burden',
+        'col-default-11': 'QoL impact, work productivity burden',
         dossierSections: ['2.1'],
       },
       {
@@ -364,16 +366,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35445695',
         'col-default-0': 'Dupilumab',
         'col-default-1': 'Atopic Dermatitis',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Comparative effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Cohort Study',
-        'col-default-6': 'North America',
-        'col-default-7': 892,
-        'col-default-8': 'EASI, IGA, DLQI vs cyclosporine, methotrexate, azathioprine',
-        'col-default-9': 'Dupilumab demonstrated superior outcomes vs conventional immunosuppressants at 16 and 52 weeks in real-world setting.',
-        'col-default-10': '52 weeks',
-        'col-default-11': '2L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Real-World',
+        'col-default-4': 'Industry',
+        'col-default-5': 'United States',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Comparative effectiveness',
+        'col-default-8': 'Adults with moderate-to-severe AD switching from conventional systemic therapy',
+        'col-default-9': 'Dupilumab, cyclosporine, methotrexate, azathioprine',
+        'col-default-10': 'EASI, IGA, DLQI vs conventional immunosuppressants',
+        'col-default-11': 'Treatment discontinuation rates, safety comparisons',
         dossierSections: ['4.2', '4.3'],
       },
     ],
@@ -402,16 +404,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/29634964',
         'col-default-0': 'Semaglutide',
         'col-default-1': 'Type 2 Diabetes',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Clinical efficacy / effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Randomized Controlled Trial',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 3297,
-        'col-default-8': 'MACE (CV death, non-fatal MI, non-fatal stroke)',
-        'col-default-9': 'Semaglutide reduced MACE by 26% vs placebo (HR 0.74, 95% CI 0.58–0.95). Significant reductions in HbA1c and body weight.',
-        'col-default-10': '104 weeks',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Clinical efficacy / effectiveness',
+        'col-default-8': 'Adults with T2D and high cardiovascular risk',
+        'col-default-9': 'Semaglutide 0.5mg, semaglutide 1.0mg, placebo',
+        'col-default-10': 'MACE (CV death, non-fatal MI, non-fatal stroke)',
+        'col-default-11': 'HbA1c change, body weight change, individual MACE components',
       },
       {
         id: 'art-s2',
@@ -424,16 +426,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/34633860',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Clinical efficacy / effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Randomized Controlled Trial',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 1961,
-        'col-default-8': '≥5% body weight reduction at 68 weeks',
-        'col-default-9': 'Mean weight loss: 14.9% semaglutide vs 2.4% placebo. 86.4% achieved ≥5% weight reduction. Significant improvements in cardiometabolic risk factors.',
-        'col-default-10': '68 weeks',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Clinical efficacy / effectiveness',
+        'col-default-8': 'Adults with BMI ≥30 or ≥27 with weight-related comorbidity, without diabetes',
+        'col-default-9': 'Semaglutide 2.4mg, placebo',
+        'col-default-10': '≥5% body weight reduction at 68 weeks',
+        'col-default-11': 'Waist circumference, blood pressure, lipid profile, CRP',
       },
       {
         id: 'art-s3',
@@ -446,16 +448,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/36622835',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity',
-        'col-default-2': 'Economic value',
-        'col-default-3': 'Cost effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Modeling Study',
-        'col-default-6': 'North America',
-        'col-default-7': null,
-        'col-default-8': 'ICER per QALY gained',
-        'col-default-9': 'Semaglutide was cost-effective vs lifestyle intervention at $150,000/QALY threshold. ICER: $108,000/QALY. Driven by reduced CV events and comorbidities.',
-        'col-default-10': 'Lifetime',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Economic',
+        'col-default-4': 'Industry',
+        'col-default-5': 'United States',
+        'col-default-6': 'Economic value',
+        'col-default-7': 'Cost effectiveness',
+        'col-default-8': 'Adults with obesity in the US healthcare system',
+        'col-default-9': 'Semaglutide 2.4mg, lifestyle intervention',
+        'col-default-10': 'ICER per QALY gained',
+        'col-default-11': 'Cardiovascular event reduction, comorbidity resolution',
       },
       {
         id: 'art-s4',
@@ -468,16 +470,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35499086',
         'col-default-0': 'Semaglutide',
         'col-default-1': 'Type 2 Diabetes',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Comparative effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Cohort Study',
-        'col-default-6': 'Europe',
-        'col-default-7': 1545,
-        'col-default-8': 'HbA1c change, body weight change at 30 weeks',
-        'col-default-9': 'Real-world HbA1c reduction: -1.4% (baseline 8.4%). Weight loss: -4.7 kg. Consistent with clinical trial results.',
-        'col-default-10': '30 weeks',
-        'col-default-11': '2L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Real-World',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Western Europe',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Clinical efficacy / effectiveness',
+        'col-default-8': 'Adults with T2D in routine clinical practice in Denmark and Sweden',
+        'col-default-9': 'Semaglutide',
+        'col-default-10': 'HbA1c change, body weight change at 30 weeks',
+        'col-default-11': 'Treatment satisfaction, treatment persistence',
       },
       {
         id: 'art-s5',
@@ -490,16 +492,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/37285075',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity',
-        'col-default-2': 'Disease Burden – Humanistic',
-        'col-default-3': 'PROs',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Modeling Study',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 4532,
-        'col-default-8': 'IWQOL-Lite-CT, SF-36',
-        'col-default-9': 'Significant improvements in physical function, mental health, and work productivity with semaglutide vs placebo.',
-        'col-default-10': '68 weeks',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Disease Burden – Humanistic',
+        'col-default-7': 'PROs',
+        'col-default-8': 'Adults with overweight or obesity from STEP trials',
+        'col-default-9': 'Semaglutide 2.4mg, placebo',
+        'col-default-10': 'IWQOL-Lite-CT, SF-36',
+        'col-default-11': 'Physical function, mental health, work productivity',
       },
       {
         id: 'art-s6',
@@ -512,16 +514,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/37952189',
         'col-default-0': 'Semaglutide 2.4mg',
         'col-default-1': 'Obesity / Cardiovascular Disease',
-        'col-default-2': 'Efficacy / effectiveness',
-        'col-default-3': 'Clinical efficacy / effectiveness',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Randomized Controlled Trial',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 17604,
-        'col-default-8': 'MACE (CV death, non-fatal MI, non-fatal stroke)',
-        'col-default-9': 'Semaglutide reduced MACE by 20% in obese patients without diabetes (HR 0.80, 95% CI 0.72-0.90). Landmark trial in non-diabetic population.',
-        'col-default-10': '3.3 years (median)',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Efficacy / effectiveness',
+        'col-default-7': 'Clinical efficacy / effectiveness',
+        'col-default-8': 'Adults with BMI ≥27 and established cardiovascular disease, without diabetes',
+        'col-default-9': 'Semaglutide 2.4mg, placebo',
+        'col-default-10': 'MACE (CV death, non-fatal MI, non-fatal stroke)',
+        'col-default-11': 'All-cause mortality, heart failure hospitalization, body weight change',
       },
       {
         id: 'art-s7',
@@ -532,18 +534,18 @@ const INITIAL_LIBRARIES: Library[] = [
         journal: 'Diabetes Research and Clinical Practice',
         publicationDate: '2022-01-01',
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/35796025',
-        'col-default-0': 'Not Applicable',
+        'col-default-0': 'Nonspecific',
         'col-default-1': 'Type 2 Diabetes',
-        'col-default-2': 'Disease Burden – Clinical',
-        'col-default-3': 'Epidemiology',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Systematic Review',
-        'col-default-6': 'Global',
-        'col-default-7': null,
-        'col-default-8': 'Prevalence, incidence, economic burden',
-        'col-default-9': '537 million adults (10.5%) living with diabetes. Projected 643 million by 2030. Global health expenditure: $966 billion (2021).',
-        'col-default-10': 'Cross-sectional (2021)',
-        'col-default-11': 'Not Applicable',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'SLR / TLR',
+        'col-default-4': 'Academia',
+        'col-default-5': 'Global',
+        'col-default-6': 'Disease Burden – Clinical',
+        'col-default-7': 'Epidemiology',
+        'col-default-8': 'Global adult population aged 20-79 years',
+        'col-default-9': 'Nonspecific',
+        'col-default-10': 'Prevalence, incidence, economic burden',
+        'col-default-11': 'Regional prevalence differences, projected trends',
       },
       {
         id: 'art-s8',
@@ -556,16 +558,16 @@ const INITIAL_LIBRARIES: Library[] = [
         publicationLink: 'https://pubmed.ncbi.nlm.nih.gov/36462488',
         'col-default-0': 'Semaglutide',
         'col-default-1': 'Type 2 Diabetes / Obesity',
-        'col-default-2': 'Safety',
-        'col-default-3': 'Safety – General',
-        'col-default-4': 'Journal Article',
-        'col-default-5': 'Modeling Study',
-        'col-default-6': 'Multi-Regional',
-        'col-default-7': 8726,
-        'col-default-8': 'GI AEs, pancreatitis, thyroid events, SAEs',
-        'col-default-9': 'GI events most common (nausea 15-44%, vomiting 5-24%). Mostly mild-moderate, early, transient. No increased pancreatitis or thyroid cancer risk.',
-        'col-default-10': 'Varies (16-104 weeks)',
-        'col-default-11': '1L',
+        'col-default-2': 'Manuscript',
+        'col-default-3': 'Clinical',
+        'col-default-4': 'Industry',
+        'col-default-5': 'Global',
+        'col-default-6': 'Safety',
+        'col-default-7': 'Safety – General',
+        'col-default-8': 'Adults with T2D or obesity from SUSTAIN and STEP programs',
+        'col-default-9': 'Semaglutide, placebo',
+        'col-default-10': 'GI AEs, pancreatitis, thyroid events, SAEs',
+        'col-default-11': 'Injection site reactions, treatment discontinuation due to AEs',
       },
     ],
   },
@@ -578,16 +580,17 @@ export const useLibraryStore = create<LibraryState>()(
       activeLibraryId: null,
 
       createLibrary: (data) => {
+        const { columns, categoryHierarchy, ...rest } = data;
         const newLibrary: Library = {
-          ...data,
+          ...rest,
           id: `lib-${generateId()}`,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           articleCount: 0,
-          columns: createDefaultColumns(),
+          columns: columns ?? createDefaultColumns(),
           articles: [],
           dateQuickActions: [...DEFAULT_QUICK_ACTIONS],
-          categoryHierarchy: DEFAULT_CATEGORY_HIERARCHY.map((n) => ({ ...n })),
+          categoryHierarchy: categoryHierarchy ?? DEFAULT_CATEGORY_HIERARCHY.map((n) => ({ ...n })),
         };
         set((state) => ({ libraries: [...state.libraries, newLibrary] }));
         return newLibrary;
@@ -744,11 +747,29 @@ export const useLibraryStore = create<LibraryState>()(
 
         const PRODUCT_KEYWORDS: Record<string, string> = {
           dupilumab: 'Dupilumab', dupixent: 'Dupilumab', 'il-4': 'Dupilumab', 'il-13': 'Dupilumab',
+          semaglutide: 'Semaglutide', ozempic: 'Semaglutide', wegovy: 'Semaglutide 2.4mg', rybelsus: 'Semaglutide',
         };
         const INDICATION_KEYWORDS: Record<string, string> = {
           'atopic dermatitis': 'Atopic Dermatitis', eczema: 'Atopic Dermatitis',
           asthma: 'Asthma', 'prurigo nodularis': 'Prurigo Nodularis',
           'allergic rhinitis': 'Allergic Rhinitis',
+          'type 2 diabetes': 'Type 2 Diabetes', 't2d': 'Type 2 Diabetes', 't2dm': 'Type 2 Diabetes',
+          obesity: 'Obesity', overweight: 'Obesity',
+          'cardiovascular': 'Cardiovascular Disease',
+        };
+        const SPONSOR_KEYWORDS: Record<string, string> = {
+          'sanofi': 'Industry', 'regeneron': 'Industry', 'novo nordisk': 'Industry',
+          'pfizer': 'Industry', 'roche': 'Industry', 'novartis': 'Industry', 'abbvie': 'Industry',
+          'gsk': 'Industry', 'astrazeneca': 'Industry', 'merck': 'Industry', 'lilly': 'Industry',
+          'sponsored by': 'Industry', 'funded by': 'Industry',
+        };
+        const GEOGRAPHY_KEYWORDS: Record<string, string> = {
+          'united states': 'United States', 'u.s.': 'United States', 'us ': 'United States',
+          'canada': 'Canada', 'uk': 'UK', 'united kingdom': 'UK',
+          'france': 'France', 'germany': 'Germany', 'italy': 'Italy', 'spain': 'Spain',
+          'global': 'Global', 'multinational': 'Global', 'multiregional': 'Global', 'multi-regional': 'Global',
+          'europe': 'Western Europe', 'european': 'Western Europe',
+          'latin america': 'LatAm', 'asia': 'APAC', 'middle east': 'MENA',
         };
 
         function inferText(text: string, map: Record<string, string>, fallback: string): string {
@@ -767,26 +788,45 @@ export const useLibraryStore = create<LibraryState>()(
               updatedAt: new Date().toISOString(),
               articles: lib.articles.map((art) => {
                 if (!articleIds.includes(art.id)) return art;
-                const textBlob = `${art.title} ${art.abstract ?? ''}`.toLowerCase();
+                const textBlob = `${art.title} ${art.authors ?? ''} ${art.abstract ?? ''}`.toLowerCase();
                 const updates: Record<string, any> = {};
+                const cellMeta: Record<string, CellMeta> = { ...(art._cellMeta || {}) };
                 for (const col of lib.columns) {
-                  if (art[col.id] !== undefined && art[col.id] !== '') continue; // skip filled
-                  if (col.name === 'Product' || col.name.toLowerCase().includes('product')) {
-                    updates[col.id] = inferText(textBlob, PRODUCT_KEYWORDS, '—');
-                  } else if (col.name === 'Indication' || col.name.toLowerCase().includes('indication')) {
-                    updates[col.id] = inferText(textBlob, INDICATION_KEYWORDS, '—');
+                  const existing = art[col.id];
+                  if (existing !== undefined && existing !== '' && existing !== 'AI-generated value') continue;
+                  const colName = col.name.toLowerCase();
+                  if (colName === 'product') {
+                    const val = inferText(textBlob, PRODUCT_KEYWORDS, 'Nonspecific');
+                    updates[col.id] = val;
+                    const matched = val !== 'Nonspecific';
+                    cellMeta[col.id] = { confidence: matched ? 90 : 50, reasoning: matched ? 'Keyword match in title/abstract' : 'No product keyword found; defaulted to Nonspecific', sourceSnippet: art.title.substring(0, 120) };
+                  } else if (colName === 'indication') {
+                    const val = inferText(textBlob, INDICATION_KEYWORDS, '—');
+                    updates[col.id] = val;
+                    const matched = val !== '—';
+                    cellMeta[col.id] = { confidence: matched ? 88 : 45, reasoning: matched ? 'Indication keyword matched in title/abstract' : 'No indication keyword found', sourceSnippet: art.title.substring(0, 120) };
+                  } else if (colName === 'study sponsor') {
+                    const val = inferText(textBlob, SPONSOR_KEYWORDS, 'Academia');
+                    updates[col.id] = val;
+                    cellMeta[col.id] = { confidence: val === 'Academia' ? 55 : 82, reasoning: val === 'Academia' ? 'No sponsor keyword found; defaulted to Academia' : 'Sponsor keyword detected in text', sourceSnippet: '' };
+                  } else if (colName === 'geography') {
+                    const val = inferText(textBlob, GEOGRAPHY_KEYWORDS, 'Global');
+                    updates[col.id] = val;
+                    cellMeta[col.id] = { confidence: 75, reasoning: 'Geography inferred from text keywords', sourceSnippet: '' };
                   } else if (col.type === 'select' && col.predefinedValues?.length) {
-                    // Pick plausible value based on text
                     const match = col.predefinedValues.find((v) => textBlob.includes(v.toLowerCase()));
                     updates[col.id] = match ?? col.predefinedValues[0];
+                    cellMeta[col.id] = { confidence: match ? 85 : 45, reasoning: match ? `Matched predefined value "${match}" in text` : `No match found; defaulted to first option`, sourceSnippet: '' };
                   } else if (col.type === 'number') {
                     const nMatch = textBlob.match(/n\s*=\s*(\d+)/);
                     updates[col.id] = nMatch ? parseInt(nMatch[1]) : null;
+                    cellMeta[col.id] = { confidence: nMatch ? 78 : 30, reasoning: nMatch ? `Extracted n=${nMatch[1]} from text` : 'No numeric pattern found', sourceSnippet: nMatch ? nMatch[0] : '' };
                   } else if (col.type === 'text' && col.aiPrompt) {
                     updates[col.id] = '(AI extracted — review required)';
+                    cellMeta[col.id] = { confidence: 50, reasoning: 'Placeholder text — full AI extraction required', sourceSnippet: '' };
                   }
                 }
-                return { ...art, ...updates };
+                return { ...art, ...updates, _cellMeta: cellMeta };
               }),
             };
           }),
@@ -799,7 +839,7 @@ export const useLibraryStore = create<LibraryState>()(
     }),
     {
       name: 'ehcore-libraries',
-      version: 3,
+      version: 4,
       migrate: (persistedState: any, version: number) => {
         const state = persistedState as { libraries?: any[] };
         if (version < 2) {
@@ -834,6 +874,7 @@ export const useLibraryStore = create<LibraryState>()(
             }));
           }
         }
+        // v4: _cellMeta field added to LibraryArticle — no migration needed (optional field)
         return persistedState;
       },
     }

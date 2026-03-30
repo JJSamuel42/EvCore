@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Settings2,
   Plus,
@@ -20,14 +21,23 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  ShieldCheck,
 } from 'lucide-react';
 import { Library, LibraryArticle, LibraryColumn, SortState, DateQuickAction, CategoryNode } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ColumnEditor } from './ColumnEditor';
+import { ImportModal } from './ImportModal';
+import { CellConfidenceIndicator } from './CellConfidenceIndicator';
+import { CellDetailModal } from './CellDetailModal';
+import { QCPanel } from './QCPanel';
+import { runAllChecks, QCIssue } from '@/lib/qcChecks';
+import { SelectionActionsMenu } from './SelectionActionsMenu';
+import { QuickSummaryModal } from './QuickSummaryModal';
 import { Dialog, DialogContent, DialogClose } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { useLibraryStore, DEFAULT_CATEGORY_HIERARCHY } from '@/store/libraries';
+import { ArticleMetadata } from '@/lib/pubmed';
 import { cn, truncate, formatDate, formatNumber } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 
@@ -59,7 +69,8 @@ function getDateFromQuickAction(action: DateQuickAction): { from: string; to: st
 }
 
 export function LibraryTable({ library }: LibraryTableProps) {
-  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy, deleteArticle } = useLibraryStore();
+  const router = useRouter();
+  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy, deleteArticle, addArticle, bulkProcessArticles } = useLibraryStore();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'researcher';
 
@@ -76,6 +87,11 @@ export function LibraryTable({ library }: LibraryTableProps) {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [processingCol, setProcessingCol] = useState<string | null>(null);
   const [expandedAbstract, setExpandedAbstract] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [cellDetailModal, setCellDetailModal] = useState<{ articleId: string; colId: string; colName: string } | null>(null);
+  const [showQCPanel, setShowQCPanel] = useState(false);
+  const [qcIssues, setQcIssues] = useState<QCIssue[]>([]);
+  const [showQuickSummary, setShowQuickSummary] = useState(false);
   const columnPanelRef = useRef<HTMLDivElement>(null);
   const categoryPickerRef = useRef<HTMLDivElement>(null);
 
@@ -386,10 +402,12 @@ export function LibraryTable({ library }: LibraryTableProps) {
 
   const simulateAIProcess = async (colId: string) => {
     setProcessingCol(colId);
-    await new Promise((r) => setTimeout(r, 1500));
-    library.articles.forEach((art) => {
-      if (!art[colId]) updateArticle(library.id, art.id, { [colId]: 'AI-generated value' });
-    });
+    const articleIds = library.articles
+      .filter((art) => !art[colId] || art[colId] === 'AI-generated value')
+      .map((art) => art.id);
+    if (articleIds.length > 0) {
+      await bulkProcessArticles(library.id, articleIds);
+    }
     setProcessingCol(null);
   };
 
@@ -443,14 +461,43 @@ export function LibraryTable({ library }: LibraryTableProps) {
           {hasActiveFilters && ' (filtered)'}
         </span>
         <div className="flex items-center gap-2">
-          {selectedIds.size > 0 && (
-            <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
-          )}
+          <SelectionActionsMenu
+            selectedCount={selectedIds.size}
+            onQuickSummary={() => setShowQuickSummary(true)}
+            onGenerateNewsletter={() => {
+              const ids = Array.from(selectedIds).join(',');
+              router.push(`/newsletter/new?articleIds=${ids}&libraryId=${library.id}`);
+            }}
+            onBulkProcess={() => {
+              bulkProcessArticles(library.id, Array.from(selectedIds));
+            }}
+            onExportSelected={() => {
+              const selectedArts = library.articles.filter((a) => selectedIds.has(a.id));
+              const headers = ['#', 'PMID', 'Title', 'Authors', 'Journal', 'Date', ...library.columns.map((c) => c.name)];
+              const rows = selectedArts.map((art) => [
+                art.articleNumber,
+                art.pmid,
+                `"${art.title.replace(/"/g, '""')}"`,
+                `"${art.authors.replace(/"/g, '""')}"`,
+                `"${art.journal.replace(/"/g, '""')}"`,
+                art.publicationDate,
+                ...library.columns.map((c) => `"${String(art[c.id] ?? '').replace(/"/g, '""')}"`),
+              ]);
+              const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${library.name}_selected_${selectedArts.length}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          />
           <Button size="sm" variant="ghost" leftIcon={<Download className="w-3.5 h-3.5" />}>
             Export
           </Button>
-          <Button size="sm" variant="ghost" leftIcon={<Upload className="w-3.5 h-3.5" />}>
-            Upload Excel
+          <Button size="sm" variant="ghost" leftIcon={<Upload className="w-3.5 h-3.5" />} onClick={() => setShowImportModal(true)}>
+            Import
           </Button>
 
           {/* Column panel */}
@@ -542,6 +589,20 @@ export function LibraryTable({ library }: LibraryTableProps) {
             )}
           </div>
 
+          {isAdmin && adminMode && (
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<ShieldCheck className="w-3.5 h-3.5" />}
+              onClick={() => {
+                const issues = runAllChecks(library.articles, library.columns, library.categoryHierarchy);
+                setQcIssues(issues);
+                setShowQCPanel(true);
+              }}
+            >
+              QC Check
+            </Button>
+          )}
           {isAdmin && (
             <Button
               size="sm"
@@ -580,7 +641,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
           </button>
 
           {showCategoryPicker && (
-            <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg w-64 max-h-80 overflow-y-auto">
+            <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg w-80 max-h-80 overflow-y-auto">
               {/* Clear option */}
               {categorySelection && (
                 <button
@@ -844,7 +905,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
                   className="text-center py-12 text-sm text-muted-foreground"
                 >
                   {library.articles.length === 0
-                    ? 'No articles yet. Upload an Excel file to get started.'
+                    ? 'No articles yet. Click Import to add articles.'
                     : 'No articles match the current filters.'}
                 </td>
               </tr>
@@ -919,17 +980,25 @@ export function LibraryTable({ library }: LibraryTableProps) {
                   {orderedVisibleLibraryCols.map((col) => {
                     const val = article[col.id];
                     const strVal = String(val ?? '');
+                    const cellMeta = article._cellMeta?.[col.id];
                     return (
-                      <td key={col.id}>
-                        {col.type === 'number' ? (
-                          <span className="text-xs font-mono text-foreground">{formatNumber(val)}</span>
-                        ) : col.type === 'select' && val ? (
-                          <Badge variant="neutral" size="sm">{val}</Badge>
-                        ) : (
-                          <p className="text-xs text-foreground leading-snug" title={strVal.length > 60 ? strVal : undefined}>
-                            {truncate(strVal, 60)}
-                          </p>
-                        )}
+                      <td
+                        key={col.id}
+                        className={adminMode ? 'cursor-pointer hover:bg-muted/30' : undefined}
+                        onClick={adminMode ? () => setCellDetailModal({ articleId: article.id, colId: col.id, colName: col.name }) : undefined}
+                      >
+                        <div className="relative">
+                          {col.type === 'number' ? (
+                            <span className="text-xs font-mono text-foreground">{formatNumber(val)}</span>
+                          ) : col.type === 'select' && val ? (
+                            <Badge variant="neutral" size="sm">{val}</Badge>
+                          ) : (
+                            <p className="text-xs text-foreground leading-snug" title={strVal.length > 60 ? strVal : undefined}>
+                              {truncate(strVal, 60)}
+                            </p>
+                          )}
+                          {adminMode && <CellConfidenceIndicator meta={cellMeta} value={val} />}
+                        </div>
                       </td>
                     );
                   })}
@@ -1204,6 +1273,109 @@ export function LibraryTable({ library }: LibraryTableProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Quick Summary Modal */}
+      <QuickSummaryModal
+        open={showQuickSummary}
+        onOpenChange={setShowQuickSummary}
+        articles={library.articles.filter((a) => selectedIds.has(a.id))}
+        columns={library.columns}
+      />
+
+      {/* QC Panel */}
+      <QCPanel
+        open={showQCPanel}
+        onOpenChange={setShowQCPanel}
+        issues={qcIssues}
+        onFixIssue={(issue) => {
+          if (issue.suggestedValue) {
+            if (issue.type === 'category_mismatch') {
+              // Fix category to match subcategory
+              const catCol = library.columns.find((c) => c.name === 'Category');
+              if (catCol) {
+                const correctCat = issue.suggestedValue.split(' > ')[0];
+                updateArticle(library.id, issue.articleId, { [catCol.id]: correctCat });
+              }
+            } else {
+              updateArticle(library.id, issue.articleId, { [issue.columnId]: issue.suggestedValue });
+            }
+            setQcIssues((prev) => prev.filter((i) => !(i.articleId === issue.articleId && i.columnId === issue.columnId)));
+          }
+        }}
+        onFixAll={(type) => {
+          const toFix = qcIssues.filter((i) => i.type === type && i.suggestedValue);
+          for (const issue of toFix) {
+            if (issue.type === 'category_mismatch') {
+              const catCol = library.columns.find((c) => c.name === 'Category');
+              if (catCol) {
+                const correctCat = issue.suggestedValue.split(' > ')[0];
+                updateArticle(library.id, issue.articleId, { [catCol.id]: correctCat });
+              }
+            } else {
+              updateArticle(library.id, issue.articleId, { [issue.columnId]: issue.suggestedValue });
+            }
+          }
+          setQcIssues((prev) => prev.filter((i) => i.type !== type || !i.suggestedValue));
+        }}
+        onFindReplace={(columnId, find, replace) => {
+          for (const art of library.articles) {
+            if (art[columnId] === find) {
+              updateArticle(library.id, art.id, { [columnId]: replace });
+            }
+          }
+          setQcIssues((prev) => prev.filter((i) => !(i.columnId === columnId && i.currentValue === find)));
+        }}
+      />
+
+      {/* Cell Detail Modal (admin mode) */}
+      {cellDetailModal && (() => {
+        const art = library.articles.find((a) => a.id === cellDetailModal.articleId);
+        if (!art) return null;
+        return (
+          <CellDetailModal
+            open={true}
+            onOpenChange={(open) => { if (!open) setCellDetailModal(null); }}
+            columnName={cellDetailModal.colName}
+            value={art[cellDetailModal.colId]}
+            meta={art._cellMeta?.[cellDetailModal.colId]}
+            onSave={(newValue, overrideReason) => {
+              const updates: Record<string, any> = { [cellDetailModal.colId]: newValue };
+              const meta = { ...(art._cellMeta || {}) };
+              meta[cellDetailModal.colId] = {
+                confidence: 100,
+                reasoning: overrideReason ? `User override: ${overrideReason}` : 'User override',
+                sourceSnippet: '',
+              };
+              updates._cellMeta = meta;
+              updateArticle(library.id, cellDetailModal.articleId, updates);
+              setCellDetailModal(null);
+            }}
+          />
+        );
+      })()}
+
+      {/* Import Modal */}
+      <ImportModal
+        open={showImportModal}
+        onOpenChange={setShowImportModal}
+        onImport={(articles: ArticleMetadata[]) => {
+          const newArticleIds: string[] = [];
+          for (const art of articles) {
+            const added = addArticle(library.id, {
+              pmid: art.pmid,
+              title: art.title,
+              authors: art.authors,
+              journal: art.journal,
+              publicationDate: art.publicationDate,
+              publicationLink: art.publicationLink,
+            });
+            if (added) newArticleIds.push(added.id);
+          }
+          if (newArticleIds.length > 0) {
+            bulkProcessArticles(library.id, newArticleIds);
+          }
+        }}
+      />
     </div>
   );
 }

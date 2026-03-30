@@ -66,7 +66,7 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
           align="start"
           sideOffset={4}
           className={cn(
-            'w-80 bg-card border border-border rounded-lg shadow-lg z-50',
+            'w-[480px] bg-card border border-border rounded-lg shadow-lg z-50',
             'focus:outline-none'
           )}
         >

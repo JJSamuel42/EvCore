@@ -89,6 +89,12 @@ export interface LitSearchState {
   runAIReview: (sessionId: string) => Promise<void>;
 }
 
+export interface CellMeta {
+  confidence: number;      // 0–100
+  reasoning: string;
+  sourceSnippet: string;
+}
+
 export interface LibraryArticle {
   id: string;
   articleNumber: number;
@@ -98,6 +104,7 @@ export interface LibraryArticle {
   journal: string;
   publicationDate: string;
   publicationLink: string;
+  _cellMeta?: Record<string, CellMeta>;
   [key: string]: any;
 }
 

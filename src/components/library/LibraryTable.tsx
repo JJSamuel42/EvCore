@@ -23,6 +23,8 @@ import {
   Trash2,
   ShieldCheck,
   FileText,
+  Layers,
+  Brain,
 } from 'lucide-react';
 import { Library, LibraryArticle, LibraryColumn, SortState, DateQuickAction, CategoryNode } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +38,7 @@ import { runAllChecks, QCIssue } from '@/lib/qcChecks';
 import { SelectionActionsMenu } from './SelectionActionsMenu';
 import { QuickSummaryModal } from './QuickSummaryModal';
 import { Dialog, DialogContent, DialogClose } from '@/components/ui/Dialog';
+import { TrainingDataModal } from './TrainingDataModal';
 import { Input } from '@/components/ui/Input';
 import { useLibraryStore, DEFAULT_CATEGORY_HIERARCHY } from '@/store/libraries';
 import { ArticleMetadata } from '@/lib/pubmed';
@@ -71,7 +74,7 @@ function getDateFromQuickAction(action: DateQuickAction): { from: string; to: st
 
 export function LibraryTable({ library }: LibraryTableProps) {
   const router = useRouter();
-  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy, deleteArticle, addArticle, bulkProcessArticles } = useLibraryStore();
+  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy, deleteArticle, addArticle, bulkProcessArticles, updateLibrary, addTrainingRecord, trainingRecords } = useLibraryStore();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'researcher';
 
@@ -93,6 +96,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
   const [showQCPanel, setShowQCPanel] = useState(false);
   const [qcIssues, setQcIssues] = useState<QCIssue[]>([]);
   const [showQuickSummary, setShowQuickSummary] = useState(false);
+  const [showTrainingModal, setShowTrainingModal] = useState(false);
   const columnPanelRef = useRef<HTMLDivElement>(null);
   const categoryPickerRef = useRef<HTMLDivElement>(null);
 
@@ -604,6 +608,29 @@ export function LibraryTable({ library }: LibraryTableProps) {
               QC Check
             </Button>
           )}
+          {isAdmin && adminMode && (() => {
+            const libTraining = trainingRecords.filter((r) => r.libraryId === library.id);
+            return (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Brain className="w-3.5 h-3.5" />}
+                  onClick={() => setShowTrainingModal(true)}
+                >
+                  Training Data {libTraining.length > 0 && `(${libTraining.length})`}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={library.dossierEnabled ? 'primary' : 'secondary'}
+                  leftIcon={<Layers className="w-3.5 h-3.5" />}
+                  onClick={() => updateLibrary(library.id, { dossierEnabled: !library.dossierEnabled })}
+                >
+                  {library.dossierEnabled ? 'Dossier On' : 'Dossier Off'}
+                </Button>
+              </>
+            );
+          })()}
           {isAdmin && (
             <Button
               size="sm"
@@ -868,12 +895,14 @@ export function LibraryTable({ library }: LibraryTableProps) {
                 </th>
               ))}
 
-              {/* Dossier Sections — always-visible fixed column */}
-              <th className="min-w-[140px]">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span>Dossier Sections</span>
-                </div>
-              </th>
+              {/* Dossier Sections — shown only when enabled by admin */}
+              {library.dossierEnabled && (
+                <th className="min-w-[140px]">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span>Dossier Sections</span>
+                  </div>
+                </th>
+              )}
 
               {adminMode && (
                 <th className="w-10">
@@ -1033,10 +1062,12 @@ export function LibraryTable({ library }: LibraryTableProps) {
                     return (
                       <td
                         key={col.id}
-                        className={adminMode ? 'cursor-pointer hover:bg-muted/30' : undefined}
+                        className={cn(
+                          adminMode ? 'relative cursor-pointer hover:bg-muted/30' : undefined
+                        )}
                         onClick={adminMode ? () => setCellDetailModal({ articleId: article.id, colId: col.id, colName: col.name }) : undefined}
                       >
-                        <div className="relative">
+                        <div>
                           {col.type === 'number' ? (
                             <span className="text-xs font-mono text-foreground">{formatNumber(val)}</span>
                           ) : col.type === 'select' && val ? (
@@ -1046,14 +1077,14 @@ export function LibraryTable({ library }: LibraryTableProps) {
                               {truncate(strVal, 60)}
                             </p>
                           )}
-                          {adminMode && <CellConfidenceIndicator meta={cellMeta} value={val} />}
                         </div>
+                        {adminMode && <CellConfidenceIndicator meta={cellMeta} value={val} />}
                       </td>
                     );
                   })}
 
-                  {/* Dossier Sections cell */}
-                  <td
+                  {/* Dossier Sections cell — only when enabled */}
+                  {library.dossierEnabled && <td
                     className="align-top"
                     onClick={() => {
                       setEditingDossierArt(article.id);
@@ -1118,7 +1149,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
                         <span className="text-[10px] text-muted-foreground/30 italic">+ tag</span>
                       )}
                     </div>
-                  </td>
+                  </td>}
 
                   {adminMode && (
                     <td>
@@ -1397,6 +1428,20 @@ export function LibraryTable({ library }: LibraryTableProps) {
               };
               updates._cellMeta = meta;
               updateArticle(library.id, cellDetailModal.articleId, updates);
+              // Capture correction as a training record for future AI learning
+              const originalValue = art[cellDetailModal.colId];
+              const col = library.columns.find((c) => c.id === cellDetailModal.colId);
+              if (col) {
+                addTrainingRecord({
+                  libraryId: library.id,
+                  columnId: cellDetailModal.colId,
+                  columnName: col.name,
+                  abstractSnippet: String(art.abstract ?? '').slice(0, 300),
+                  aiValue: String(originalValue ?? ''),
+                  userValue: String(newValue ?? ''),
+                  overrideReason,
+                });
+              }
               setCellDetailModal(null);
             }}
           />
@@ -1424,6 +1469,14 @@ export function LibraryTable({ library }: LibraryTableProps) {
             bulkProcessArticles(library.id, newArticleIds);
           }
         }}
+      />
+
+      {/* Training Data Modal */}
+      <TrainingDataModal
+        open={showTrainingModal}
+        onOpenChange={setShowTrainingModal}
+        records={trainingRecords}
+        libraryId={library.id}
       />
     </div>
   );

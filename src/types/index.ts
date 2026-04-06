@@ -122,6 +122,19 @@ export interface Library {
   articles: LibraryArticle[];
   dateQuickActions: DateQuickAction[];
   categoryHierarchy: CategoryNode[];
+  dossierEnabled?: boolean;  // off by default; enabled per-library by admin
+}
+
+export interface TrainingRecord {
+  id: string;
+  libraryId: string;
+  columnId: string;
+  columnName: string;
+  abstractSnippet: string;  // first 300 chars of article abstract
+  aiValue: string;          // original AI-extracted value (may be empty)
+  userValue: string;        // value user corrected it to
+  overrideReason?: string;
+  timestamp: string;
 }
 
 // ============================================================

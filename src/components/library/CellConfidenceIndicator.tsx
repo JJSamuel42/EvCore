@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { CellMeta } from '@/types';
-import { cn } from '@/lib/utils';
 
 interface CellConfidenceIndicatorProps {
   meta?: CellMeta;
@@ -15,11 +14,15 @@ function isEmpty(value: any): boolean {
   return EMPTY_VALUES.has(value) || (typeof value === 'string' && value.trim() === '');
 }
 
+// Filled circular badge positioned at bottom-right of the parent <td> (which must be position:relative)
 export function CellConfidenceIndicator({ meta, value }: CellConfidenceIndicatorProps) {
-  // Red ! — value is empty/unextractable (only after processing, i.e. meta exists)
+  // Red circle — AI processed but could not extract a value
   if (meta && isEmpty(value)) {
     return (
-      <span className="absolute bottom-0.5 right-1 text-[9px] font-bold text-exclude" title="AI could not extract a value — click to review">
+      <span
+        className="absolute bottom-1 right-1 inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-exclude text-white text-[9px] font-bold leading-none select-none pointer-events-none"
+        title="AI could not extract a value — click to review"
+      >
         !
       </span>
     );
@@ -28,17 +31,16 @@ export function CellConfidenceIndicator({ meta, value }: CellConfidenceIndicator
   // No meta = cell not yet processed → no indicator
   if (!meta) return null;
 
-  // Has value, has meta
   const { confidence } = meta;
 
   // ≥90%: no indicator (high confidence)
   if (confidence >= 90) return null;
 
-  // 75-89%: single yellow ! (medium confidence)
+  // 75-89%: single yellow circle (medium confidence)
   if (confidence >= 75) {
     return (
       <span
-        className="absolute bottom-0.5 right-1 text-[9px] font-bold text-yellow-500"
+        className="absolute bottom-1 right-1 inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-yellow-400 text-white text-[9px] font-bold leading-none select-none pointer-events-none"
         title={`Confidence: ${confidence}% — ${meta.reasoning}`}
       >
         !
@@ -46,10 +48,10 @@ export function CellConfidenceIndicator({ meta, value }: CellConfidenceIndicator
     );
   }
 
-  // ≤74%: double yellow !! (low confidence)
+  // ≤74%: double-! yellow circle (low confidence)
   return (
     <span
-      className="absolute bottom-0.5 right-1 text-[9px] font-bold text-yellow-500"
+      className="absolute bottom-1 right-1 inline-flex items-center justify-center w-[20px] h-[18px] rounded-full bg-yellow-400 text-white text-[9px] font-bold leading-none select-none pointer-events-none"
       title={`Confidence: ${confidence}% — ${meta.reasoning}`}
     >
       !!

@@ -17,19 +17,23 @@ CREATE TABLE libraries (
 );
 
 -- Library column definitions
+-- learned_examples: JSON array of {aiValue,userValue,reason,abstractSnippet} objects.
+-- Each time a user corrects a cell and provides a rationale, a new entry is appended
+-- here AND the rationale is also appended to ai_prompt so future AI calls benefit.
 CREATE TABLE library_columns (
-  id               NVARCHAR(50)   NOT NULL PRIMARY KEY,
-  library_id       NVARCHAR(50)   NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
-  name             NVARCHAR(255)  NOT NULL,
-  description      NVARCHAR(MAX)  NOT NULL DEFAULT '',
-  type             NVARCHAR(20)   NOT NULL CHECK (type IN ('text','select','date','number')),
-  predefined_values NVARCHAR(MAX) NOT NULL DEFAULT '[]',  -- JSON array of strings
-  is_filter        BIT            NOT NULL DEFAULT 0,
-  ai_prompt        NVARCHAR(MAX)  NOT NULL DEFAULT '',
-  order_index      INT            NOT NULL DEFAULT 0,
-  is_default       BIT            NOT NULL DEFAULT 0,
-  hidden           BIT            NOT NULL DEFAULT 0,
-  width            INT            NULL
+  id                NVARCHAR(50)   NOT NULL PRIMARY KEY,
+  library_id        NVARCHAR(50)   NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+  name              NVARCHAR(255)  NOT NULL,
+  description       NVARCHAR(MAX)  NOT NULL DEFAULT '',
+  type              NVARCHAR(20)   NOT NULL CHECK (type IN ('text','select','date','number')),
+  predefined_values NVARCHAR(MAX)  NOT NULL DEFAULT '[]',  -- JSON array of strings
+  is_filter         BIT            NOT NULL DEFAULT 0,
+  ai_prompt         NVARCHAR(MAX)  NOT NULL DEFAULT '',    -- grows as corrections are made
+  learned_examples  NVARCHAR(MAX)  NOT NULL DEFAULT '[]',  -- JSON array of LearnedExample
+  order_index       INT            NOT NULL DEFAULT 0,
+  is_default        BIT            NOT NULL DEFAULT 0,
+  hidden            BIT            NOT NULL DEFAULT 0,
+  width             INT            NULL
 );
 
 -- Articles
@@ -59,20 +63,6 @@ CREATE TABLE article_column_values (
   ai_reasoning   NVARCHAR(MAX) NULL,
   source_snippet NVARCHAR(MAX) NULL,
   CONSTRAINT uq_article_column UNIQUE (article_id, column_id)
-);
-
--- AI training records (user corrections → improve future extraction)
-CREATE TABLE training_records (
-  id               NVARCHAR(50)   NOT NULL PRIMARY KEY,
-  library_id       NVARCHAR(50)   NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
-  column_id        NVARCHAR(50)   NOT NULL,   -- soft FK (column may be deleted)
-  column_name      NVARCHAR(255)  NOT NULL,
-  article_id       NVARCHAR(50)   NULL,       -- soft FK
-  abstract_snippet NVARCHAR(MAX)  NOT NULL DEFAULT '',
-  ai_value         NVARCHAR(MAX)  NOT NULL DEFAULT '',
-  user_value       NVARCHAR(MAX)  NOT NULL DEFAULT '',
-  override_reason  NVARCHAR(MAX)  NULL,
-  created_at       DATETIME2      NOT NULL DEFAULT GETUTCDATE()
 );
 
 -- Dossier sections mapping per article
@@ -105,7 +95,6 @@ CREATE TABLE user_credentials (
 CREATE INDEX ix_articles_library    ON articles(library_id);
 CREATE INDEX ix_acv_article         ON article_column_values(article_id);
 CREATE INDEX ix_acv_column          ON article_column_values(column_id);
-CREATE INDEX ix_training_library    ON training_records(library_id, column_id);
 CREATE INDEX ix_columns_library     ON library_columns(library_id, order_index);
 
 -- ============================================================

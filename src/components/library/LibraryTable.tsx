@@ -24,7 +24,6 @@ import {
   ShieldCheck,
   FileText,
   Layers,
-  Brain,
 } from 'lucide-react';
 import { Library, LibraryArticle, LibraryColumn, SortState, DateQuickAction, CategoryNode } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -38,7 +37,6 @@ import { runAllChecks, QCIssue } from '@/lib/qcChecks';
 import { SelectionActionsMenu } from './SelectionActionsMenu';
 import { QuickSummaryModal } from './QuickSummaryModal';
 import { Dialog, DialogContent, DialogClose } from '@/components/ui/Dialog';
-import { TrainingDataModal } from './TrainingDataModal';
 import { Input } from '@/components/ui/Input';
 import { useLibraryStore, DEFAULT_CATEGORY_HIERARCHY } from '@/store/libraries';
 import { ArticleMetadata } from '@/lib/pubmed';
@@ -74,7 +72,7 @@ function getDateFromQuickAction(action: DateQuickAction): { from: string; to: st
 
 export function LibraryTable({ library }: LibraryTableProps) {
   const router = useRouter();
-  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy, deleteArticle, addArticle, bulkProcessArticles, updateLibrary, addTrainingRecord, trainingRecords } = useLibraryStore();
+  const { updateColumn, deleteColumn, addColumn, updateArticle, updateArticleDossierSections, updateDateQuickActions, updateCategoryHierarchy, deleteArticle, addArticle, bulkProcessArticles, updateLibrary } = useLibraryStore();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'researcher';
 
@@ -96,7 +94,6 @@ export function LibraryTable({ library }: LibraryTableProps) {
   const [showQCPanel, setShowQCPanel] = useState(false);
   const [qcIssues, setQcIssues] = useState<QCIssue[]>([]);
   const [showQuickSummary, setShowQuickSummary] = useState(false);
-  const [showTrainingModal, setShowTrainingModal] = useState(false);
   const columnPanelRef = useRef<HTMLDivElement>(null);
   const categoryPickerRef = useRef<HTMLDivElement>(null);
 
@@ -217,28 +214,43 @@ export function LibraryTable({ library }: LibraryTableProps) {
   };
 
   // ── Column resize ─────────────────────────────────────────────────────
-  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {};
+    for (const col of library.columns) {
+      if (col.width) init[col.id] = col.width;
+    }
+    return init;
+  });
   const resizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
+  // Tracks the last dragged width so onUp can persist it to the store
+  const finalWidthRef = useRef<Record<string, number>>({});
 
   const onResizeMouseDown = useCallback((e: React.MouseEvent, colId: string) => {
     e.preventDefault();
-    const th = (e.target as HTMLElement).closest('th') as HTMLTableCellElement;
-    resizeRef.current = { colId, startX: e.clientX, startWidth: th.offsetWidth };
+    const th = (e.target as HTMLElement).closest('th'); // HTMLElement | null
+    if (!th) return;
+    resizeRef.current = { colId, startX: e.clientX, startWidth: (th as HTMLTableCellElement).offsetWidth };
 
     const onMove = (ev: MouseEvent) => {
       if (!resizeRef.current) return;
-      const delta = ev.clientX - resizeRef.current.startX;
-      const newWidth = Math.max(60, resizeRef.current.startWidth + delta);
-      setColWidths((prev) => ({ ...prev, [resizeRef.current!.colId]: newWidth }));
+      const { colId: id, startX, startWidth } = resizeRef.current;
+      const newWidth = Math.max(60, startWidth + (ev.clientX - startX));
+      finalWidthRef.current[id] = newWidth;
+      setColWidths((prev) => ({ ...prev, [id]: newWidth }));
     };
     const onUp = () => {
+      if (resizeRef.current) {
+        const { colId: id } = resizeRef.current;
+        const w = finalWidthRef.current[id];
+        if (w) updateColumn(library.id, id, { width: w });
+      }
       resizeRef.current = null;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  }, []);
+  }, [library.id, updateColumn]);
 
   // ── Named filter columns ─────────────────────────────────────────────
   const productCol = library.columns.find((c) => c.name === 'Product');
@@ -608,29 +620,16 @@ export function LibraryTable({ library }: LibraryTableProps) {
               QC Check
             </Button>
           )}
-          {isAdmin && adminMode && (() => {
-            const libTraining = trainingRecords.filter((r) => r.libraryId === library.id);
-            return (
-              <>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  leftIcon={<Brain className="w-3.5 h-3.5" />}
-                  onClick={() => setShowTrainingModal(true)}
-                >
-                  Training Data {libTraining.length > 0 && `(${libTraining.length})`}
-                </Button>
-                <Button
-                  size="sm"
-                  variant={library.dossierEnabled ? 'primary' : 'secondary'}
-                  leftIcon={<Layers className="w-3.5 h-3.5" />}
-                  onClick={() => updateLibrary(library.id, { dossierEnabled: !library.dossierEnabled })}
-                >
-                  {library.dossierEnabled ? 'Dossier On' : 'Dossier Off'}
-                </Button>
-              </>
-            );
-          })()}
+          {isAdmin && adminMode && (
+            <Button
+              size="sm"
+              variant={library.dossierEnabled ? 'primary' : 'secondary'}
+              leftIcon={<Layers className="w-3.5 h-3.5" />}
+              onClick={() => updateLibrary(library.id, { dossierEnabled: !library.dossierEnabled })}
+            >
+              {library.dossierEnabled ? 'Dossier On' : 'Dossier Off'}
+            </Button>
+          )}
           {isAdmin && (
             <Button
               size="sm"
@@ -813,6 +812,20 @@ export function LibraryTable({ library }: LibraryTableProps) {
       {/* ── Table ────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
         <table className="data-table min-w-full">
+          <colgroup>
+            <col style={{ width: 32 }} />
+            {!hiddenCols.has('articleNumber') && <col style={{ width: colWidths['articleNumber'] ?? 40 }} />}
+            {!hiddenCols.has('pmid')          && <col style={{ width: colWidths['pmid']          ?? 96 }} />}
+            {!hiddenCols.has('title')         && <col style={{ width: colWidths['title']         ?? 220 }} />}
+            {!hiddenCols.has('authors')       && <col style={{ width: colWidths['authors']       ?? 140 }} />}
+            {!hiddenCols.has('journal')       && <col style={{ width: colWidths['journal']       ?? 140 }} />}
+            {!hiddenCols.has('publicationDate') && <col style={{ width: colWidths['publicationDate'] ?? 90 }} />}
+            {orderedVisibleLibraryCols.map((col) => (
+              <col key={col.id} style={{ width: colWidths[col.id] ?? col.width ?? 120 }} />
+            ))}
+            {library.dossierEnabled && <col style={{ width: 140 }} />}
+            {adminMode && <col style={{ width: 40 }} />}
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
               <th className="w-8">
@@ -824,44 +837,44 @@ export function LibraryTable({ library }: LibraryTableProps) {
                 />
               </th>
               {!hiddenCols.has('articleNumber') && (
-                <th className="w-10 cursor-pointer relative" style={colWidths['articleNumber'] ? { width: colWidths['articleNumber'] } : undefined} onClick={() => handleSort('articleNumber')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('articleNumber')}>
                   <div className="flex items-center gap-1">#<SortIcon colId="articleNumber" /></div>
                   <div onMouseDown={(e) => onResizeMouseDown(e, 'articleNumber')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('pmid') && (
-                <th className="w-24 cursor-pointer relative" style={colWidths['pmid'] ? { width: colWidths['pmid'] } : undefined} onClick={() => handleSort('pmid')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('pmid')}>
                   <div className="flex items-center gap-1">Article ID<SortIcon colId="pmid" /></div>
                   <div onMouseDown={(e) => onResizeMouseDown(e, 'pmid')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('title') && (
-                <th className="min-w-[200px] cursor-pointer relative" style={colWidths['title'] ? { width: colWidths['title'] } : undefined} onClick={() => handleSort('title')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('title')}>
                   <div className="flex items-center gap-1">Title<SortIcon colId="title" /></div>
                   <div onMouseDown={(e) => onResizeMouseDown(e, 'title')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('authors') && (
-                <th className="min-w-[120px] relative" style={colWidths['authors'] ? { width: colWidths['authors'] } : undefined}>
+                <th className="relative">
                   Authors
                   <div onMouseDown={(e) => onResizeMouseDown(e, 'authors')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('journal') && (
-                <th className="min-w-[120px] cursor-pointer relative" style={colWidths['journal'] ? { width: colWidths['journal'] } : undefined} onClick={() => handleSort('journal')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('journal')}>
                   <div className="flex items-center gap-1">Journal<SortIcon colId="journal" /></div>
                   <div onMouseDown={(e) => onResizeMouseDown(e, 'journal')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('publicationDate') && (
-                <th className="min-w-[90px] cursor-pointer relative" style={colWidths['publicationDate'] ? { width: colWidths['publicationDate'] } : undefined} onClick={() => handleSort('publicationDate')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('publicationDate')}>
                   <div className="flex items-center gap-1">Date<SortIcon colId="publicationDate" /></div>
                   <div onMouseDown={(e) => onResizeMouseDown(e, 'publicationDate')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
 
               {orderedVisibleLibraryCols.map((col) => (
-                <th key={col.id} className="min-w-[100px] relative" style={colWidths[col.id] ? { width: colWidths[col.id] } : undefined}>
+                <th key={col.id} className="relative">
                   {adminMode ? (
                     <ColumnEditor
                       column={col}
@@ -1419,6 +1432,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
             value={art[cellDetailModal.colId]}
             meta={art._cellMeta?.[cellDetailModal.colId]}
             onSave={(newValue, overrideReason) => {
+              // Update the article value and mark confidence 100 (user-verified)
               const updates: Record<string, any> = { [cellDetailModal.colId]: newValue };
               const meta = { ...(art._cellMeta || {}) };
               meta[cellDetailModal.colId] = {
@@ -1428,19 +1442,23 @@ export function LibraryTable({ library }: LibraryTableProps) {
               };
               updates._cellMeta = meta;
               updateArticle(library.id, cellDetailModal.articleId, updates);
-              // Capture correction as a training record for future AI learning
-              const originalValue = art[cellDetailModal.colId];
+
+              // Store the correction on the column so future AI processing can learn from it
               const col = library.columns.find((c) => c.id === cellDetailModal.colId);
               if (col) {
-                addTrainingRecord({
-                  libraryId: library.id,
-                  columnId: cellDetailModal.colId,
-                  columnName: col.name,
-                  abstractSnippet: String(art.abstract ?? '').slice(0, 300),
-                  aiValue: String(originalValue ?? ''),
+                const example = {
+                  aiValue: String(art[cellDetailModal.colId] ?? ''),
                   userValue: String(newValue ?? ''),
-                  overrideReason,
-                });
+                  reason: overrideReason ?? '',
+                  abstractSnippet: String(art.abstract ?? '').slice(0, 300),
+                };
+                const newExamples = [...(col.learnedExamples ?? []), example];
+                // Append the rationale to the column's AI prompt so it's visible in ColumnEditor
+                // and used whenever a real AI API call is made
+                const newPrompt = overrideReason
+                  ? `${col.aiPrompt}\n\nCorrection example: "${example.aiValue}" → "${example.userValue}". Reason: ${overrideReason}`
+                  : col.aiPrompt;
+                updateColumn(library.id, col.id, { learnedExamples: newExamples, aiPrompt: newPrompt });
               }
               setCellDetailModal(null);
             }}
@@ -1469,14 +1487,6 @@ export function LibraryTable({ library }: LibraryTableProps) {
             bulkProcessArticles(library.id, newArticleIds);
           }
         }}
-      />
-
-      {/* Training Data Modal */}
-      <TrainingDataModal
-        open={showTrainingModal}
-        onOpenChange={setShowTrainingModal}
-        records={trainingRecords}
-        libraryId={library.id}
       />
     </div>
   );

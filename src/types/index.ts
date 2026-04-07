@@ -17,6 +17,13 @@ export interface User {
 // ============================================================
 export type ColumnType = 'text' | 'select' | 'date' | 'number';
 
+export interface LearnedExample {
+  aiValue: string;         // what AI originally had (empty = nothing extracted)
+  userValue: string;       // the corrected value
+  reason: string;          // rationale the user typed
+  abstractSnippet: string; // first 300 chars of article abstract (context for matching)
+}
+
 export interface LibraryColumn {
   id: string;
   name: string;
@@ -29,6 +36,7 @@ export interface LibraryColumn {
   isDefault?: boolean;
   hidden?: boolean;
   width?: number;
+  learnedExamples?: LearnedExample[]; // accumulated from user corrections
 }
 
 export interface CategoryNode {
@@ -123,18 +131,6 @@ export interface Library {
   dateQuickActions: DateQuickAction[];
   categoryHierarchy: CategoryNode[];
   dossierEnabled?: boolean;  // off by default; enabled per-library by admin
-}
-
-export interface TrainingRecord {
-  id: string;
-  libraryId: string;
-  columnId: string;
-  columnName: string;
-  abstractSnippet: string;  // first 300 chars of article abstract
-  aiValue: string;          // original AI-extracted value (may be empty)
-  userValue: string;        // value user corrected it to
-  overrideReason?: string;
-  timestamp: string;
 }
 
 // ============================================================

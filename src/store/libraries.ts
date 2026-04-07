@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Library, LibraryColumn, LibraryArticle, DateQuickAction, CategoryNode, CellMeta, TrainingRecord } from '@/types';
+import { Library, LibraryColumn, LibraryArticle, DateQuickAction, CategoryNode, CellMeta } from '@/types';
 
 const DEFAULT_QUICK_ACTIONS: DateQuickAction[] = [
   { id: 'q1', label: 'Last 3 months', type: 'relative_months', months: 3 },
@@ -22,7 +22,6 @@ export const DEFAULT_CATEGORY_HIERARCHY: CategoryNode[] = [
 interface LibraryState {
   libraries: Library[];
   activeLibraryId: string | null;
-  trainingRecords: TrainingRecord[];
   createLibrary: (data: { name: string; innName: string; indications: string[]; description: string; columns?: LibraryColumn[]; categoryHierarchy?: CategoryNode[] }) => Library;
   updateLibrary: (id: string, data: Partial<Library>) => void;
   updateDateQuickActions: (libraryId: string, actions: DateQuickAction[]) => void;
@@ -36,7 +35,6 @@ interface LibraryState {
   updateArticleDossierSections: (libraryId: string, articleId: string, sections: string[]) => void;
   deleteArticle: (libraryId: string, articleId: string) => void;
   bulkProcessArticles: (libraryId: string, articleIds: string[]) => Promise<void>;
-  addTrainingRecord: (record: Omit<TrainingRecord, 'id' | 'timestamp'>) => void;
   setActiveLibrary: (id: string | null) => void;
 }
 
@@ -580,7 +578,6 @@ export const useLibraryStore = create<LibraryState>()(
     (set, get) => ({
       libraries: INITIAL_LIBRARIES,
       activeLibraryId: null,
-      trainingRecords: [] as TrainingRecord[],
 
       createLibrary: (data) => {
         const { columns, categoryHierarchy, ...rest } = data;
@@ -784,8 +781,6 @@ export const useLibraryStore = create<LibraryState>()(
           return fallback;
         }
 
-        const allTrainingRecords = get().trainingRecords.filter((r) => r.libraryId === libraryId);
-
         set((state) => ({
           libraries: state.libraries.map((lib) => {
             if (lib.id !== libraryId) return lib;
@@ -801,14 +796,13 @@ export const useLibraryStore = create<LibraryState>()(
                   const existing = art[col.id];
                   if (existing !== undefined && existing !== '' && existing !== 'AI-generated value') continue;
 
-                  // ── Check training records first (highest priority) ─────────
-                  const colRecords = allTrainingRecords.filter(
-                    (r) => r.columnId === col.id && r.userValue !== '' && r.userValue !== r.aiValue
-                  );
-                  if (colRecords.length > 0) {
-                    // Find the most recent training record whose context snippet keywords appear in this article
-                    const matched = colRecords.find((r) => {
-                      const snippetWords = r.abstractSnippet.toLowerCase().split(/\W+/).filter((w) => w.length > 4);
+                  // ── Learned examples (highest priority) ────────────────────
+                  // User corrections are stored on the column; check them before
+                  // any keyword logic so learned behaviour takes precedence.
+                  if (col.learnedExamples?.length) {
+                    const matched = col.learnedExamples.find((ex) => {
+                      if (!ex.userValue) return false;
+                      const snippetWords = ex.abstractSnippet.toLowerCase().split(/\W+/).filter((w) => w.length > 4);
                       const matchCount = snippetWords.filter((w) => textBlob.includes(w)).length;
                       return matchCount >= Math.max(2, Math.floor(snippetWords.length * 0.3));
                     });
@@ -816,7 +810,7 @@ export const useLibraryStore = create<LibraryState>()(
                       updates[col.id] = matched.userValue;
                       cellMeta[col.id] = {
                         confidence: 96,
-                        reasoning: `Learned from ${colRecords.length} prior correction(s): matched context from training data`,
+                        reasoning: `Learned from ${col.learnedExamples.length} correction(s)${matched.reason ? ': ' + matched.reason : ''}`,
                         sourceSnippet: matched.abstractSnippet.slice(0, 120),
                       };
                       continue;
@@ -878,22 +872,13 @@ export const useLibraryStore = create<LibraryState>()(
         }));
       },
 
-      addTrainingRecord: (record) => {
-        const newRecord: TrainingRecord = {
-          ...record,
-          id: `tr-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-          timestamp: new Date().toISOString(),
-        };
-        set((state) => ({ trainingRecords: [...state.trainingRecords, newRecord] }));
-      },
-
       setActiveLibrary: (id) => {
         set({ activeLibraryId: id });
       },
     }),
     {
       name: 'ehcore-libraries',
-      version: 5,
+      version: 6,
       migrate: (persistedState: any, version: number) => {
         const state = persistedState as { libraries?: any[] };
         if (version < 2) {
@@ -928,11 +913,12 @@ export const useLibraryStore = create<LibraryState>()(
             }));
           }
         }
-        // v4: _cellMeta field — no migration needed (optional field)
-        // v5: trainingRecords + dossierEnabled — seed empty array if missing
-        if (version < 5) {
+        // v4: _cellMeta — no migration needed (optional field)
+        // v5: trainingRecords — seeded empty; now removed in v6
+        // v6: trainingRecords removed from root; learnedExamples on columns is optional (no backfill needed)
+        if (version < 6) {
           const s = persistedState as any;
-          if (!Array.isArray(s.trainingRecords)) s.trainingRecords = [];
+          delete s.trainingRecords; // clean up leftover from v5
         }
         return persistedState;
       },

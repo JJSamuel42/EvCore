@@ -11,10 +11,10 @@
  * Usage:
  *   import { getRepository } from '@/lib/dataRepository';
  *   const repo = getRepository();
- *   const records = await repo.getTrainingRecords('lib-123');
+ *   const lib = await repo.getLibrary('lib-123');
  */
 
-import { Library, LibraryArticle, TrainingRecord } from '@/types';
+import { Library, LibraryArticle, LibraryColumn } from '@/types';
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 
@@ -30,9 +30,8 @@ export interface DataRepository {
   saveArticle(libraryId: string, article: LibraryArticle): Promise<void>;
   deleteArticle(libraryId: string, articleId: string): Promise<void>;
 
-  // Training records
-  getTrainingRecords(libraryId: string): Promise<TrainingRecord[]>;
-  addTrainingRecord(record: TrainingRecord): Promise<void>;
+  // Columns (includes learnedExamples which accumulate from user corrections)
+  updateColumn(libraryId: string, columnId: string, data: Partial<LibraryColumn>): Promise<void>;
 }
 
 // ── LocalStorage Implementation (current) ─────────────────────────────────────
@@ -77,12 +76,8 @@ class LocalStorageRepository implements DataRepository {
     this.getStore().deleteArticle(libraryId, articleId);
   }
 
-  async getTrainingRecords(libraryId: string): Promise<TrainingRecord[]> {
-    return this.getStore().trainingRecords.filter((r: TrainingRecord) => r.libraryId === libraryId);
-  }
-
-  async addTrainingRecord(record: TrainingRecord): Promise<void> {
-    this.getStore().addTrainingRecord(record);
+  async updateColumn(libraryId: string, columnId: string, data: Partial<LibraryColumn>): Promise<void> {
+    this.getStore().updateColumn(libraryId, columnId, data);
   }
 }
 
@@ -96,9 +91,16 @@ class LocalStorageRepository implements DataRepository {
 //     return rows.map(mapLibraryFromDB);
 //   }
 //
-//   async getTrainingRecords(libraryId: string): Promise<TrainingRecord[]> {
-//     const rows = await this.prisma.trainingRecord.findMany({ where: { library_id: libraryId } });
-//     return rows.map(mapTrainingRecordFromDB);
+//   async updateColumn(libraryId: string, columnId: string, data: Partial<LibraryColumn>): Promise<void> {
+//     // learnedExamples stored as JSON in library_columns.learned_examples (NVARCHAR(MAX))
+//     await this.prisma.libraryColumn.update({
+//       where: { id: columnId },
+//       data: {
+//         ai_prompt: data.aiPrompt,
+//         learned_examples: data.learnedExamples ? JSON.stringify(data.learnedExamples) : undefined,
+//         width: data.width,
+//       },
+//     });
 //   }
 //
 //   // ... implement all methods

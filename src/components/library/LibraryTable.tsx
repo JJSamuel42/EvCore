@@ -40,7 +40,7 @@ import { Dialog, DialogContent, DialogClose } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { useLibraryStore, DEFAULT_CATEGORY_HIERARCHY } from '@/store/libraries';
 import { ArticleMetadata } from '@/lib/pubmed';
-import { cn, truncate, formatDate, formatNumber } from '@/lib/utils';
+import { cn, formatDate, formatNumber } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 
 interface LibraryTableProps {
@@ -48,6 +48,47 @@ interface LibraryTableProps {
 }
 
 const PAGE_SIZE = 25;
+
+// ── TruncatedCell ─────────────────────────────────────────────────────────────
+// Renders text truncated to `maxChars`. If truncation occurred, shows the full
+// text on hover (title attr) AND opens a small inline popover on click.
+function TruncatedCell({ full, maxChars, className }: { full: string; maxChars: number; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const isTruncated = full.length > maxChars;
+  const display = isTruncated ? full.slice(0, maxChars).trimEnd() + '…' : full;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  if (!isTruncated) {
+    return <p className={className}>{full}</p>;
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <p
+        className={cn(className, 'cursor-pointer')}
+        title={full}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+      >
+        {display}
+      </p>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 p-2.5 bg-card border border-border rounded-md shadow-lg text-xs text-foreground leading-relaxed max-w-xs break-words">
+          {full}
+        </div>
+      )}
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const SYSTEM_COLS = [
   { id: 'articleNumber', name: '#' },
@@ -1078,20 +1119,20 @@ export function LibraryTable({ library }: LibraryTableProps) {
                     </td>
                   )}
                   {!hiddenCols.has('title') && (
-                    <td>
-                      <p className="text-xs text-foreground leading-snug" title={article.title}>
-                        {truncate(article.title, 80)}
+                    <td className="cell-wrap">
+                      <p className="text-xs text-foreground leading-snug break-words">
+                        {article.title}
                       </p>
                     </td>
                   )}
                   {!hiddenCols.has('authors') && (
                     <td>
-                      <p className="text-xs text-muted-foreground" title={article.authors}>{truncate(article.authors, 40)}</p>
+                      <TruncatedCell full={article.authors ?? ''} maxChars={40} className="text-xs text-muted-foreground" />
                     </td>
                   )}
                   {!hiddenCols.has('journal') && (
                     <td>
-                      <p className="text-xs text-foreground italic" title={article.journal}>{truncate(article.journal, 30)}</p>
+                      <TruncatedCell full={article.journal ?? ''} maxChars={30} className="text-xs text-foreground italic" />
                     </td>
                   )}
                   {!hiddenCols.has('publicationDate') && (
@@ -1120,9 +1161,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
                           ) : col.type === 'select' && val ? (
                             <Badge variant="neutral" size="sm">{val}</Badge>
                           ) : (
-                            <p className="text-xs text-foreground leading-snug" title={strVal.length > 60 ? strVal : undefined}>
-                              {truncate(strVal, 60)}
-                            </p>
+                            <TruncatedCell full={strVal} maxChars={60} className="text-xs text-foreground leading-snug" />
                           )}
                         </div>
                         {adminMode && <CellConfidenceIndicator meta={cellMeta} value={val} />}

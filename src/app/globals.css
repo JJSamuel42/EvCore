@@ -164,6 +164,13 @@
     background: rgba(184, 134, 11, 0.02);
   }
 
+  /* Title cell: allow full text to wrap; row height expands naturally */
+  .data-table td.cell-wrap {
+    overflow: visible;
+    white-space: normal;
+    max-width: none;
+  }
+
   /* Login page decorative element */
   .editorial-bg {
     background:

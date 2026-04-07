@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Settings2,
@@ -211,6 +211,67 @@ export function LibraryTable({ library }: LibraryTableProps) {
       return next;
     });
   };
+
+  // ── Column resize ─────────────────────────────────────────────────────
+  // Default widths for the six fixed system columns
+  const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    articleNumber: 40, pmid: 90, title: 240, authors: 140, journal: 140, publicationDate: 90,
+  };
+
+  // Seed state from store widths (library columns) + system defaults
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = { ...DEFAULT_COL_WIDTHS };
+    for (const col of library.columns) {
+      if (col.width) init[col.id] = col.width;
+    }
+    return init;
+  });
+
+  // Refs to the <col> DOM nodes — keyed by column ID.
+  // We mutate these directly during drag so React re-renders are not needed.
+  const colRefs = useRef<Record<string, HTMLTableColElement | null>>({});
+  const resizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
+  // Tracks the final width from the last drag so onUp can persist it
+  const dragWidthRef = useRef<Record<string, number>>({});
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent, colId: string) => {
+    e.preventDefault();
+    e.stopPropagation(); // prevent sort click from firing on the <th>
+    // Read start width from current state — no DOM read needed, no null risk
+    const startWidth = colWidths[colId] ?? DEFAULT_COL_WIDTHS[colId] ?? 120;
+    resizeRef.current = { colId, startX: e.clientX, startWidth };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const { colId: id, startX, startWidth: sw } = resizeRef.current;
+      const newWidth = Math.max(60, sw + (ev.clientX - startX));
+      dragWidthRef.current[id] = newWidth;
+      // Update the <col> node directly — zero React overhead during drag
+      const colEl = colRefs.current[id];
+      if (colEl) colEl.style.width = `${newWidth}px`;
+    };
+
+    const onUp = () => {
+      if (resizeRef.current) {
+        const { colId: id } = resizeRef.current;
+        const w = dragWidthRef.current[id];
+        if (w) {
+          // Sync React state so subsequent re-renders use the new width
+          setColWidths((prev) => ({ ...prev, [id]: w }));
+          // Persist for library columns (system columns reset on refresh — that's fine)
+          const col = library.columns.find((c) => c.id === id);
+          if (col) updateColumn(library.id, id, { width: w });
+        }
+      }
+      resizeRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colWidths, library.id, library.columns, updateColumn]);
 
   // ── Named filter columns ─────────────────────────────────────────────
   const productCol = library.columns.find((c) => c.name === 'Product');
@@ -774,14 +835,14 @@ export function LibraryTable({ library }: LibraryTableProps) {
         <table className="data-table min-w-full">
           <colgroup>
             <col style={{ width: 32 }} />
-            {!hiddenCols.has('articleNumber')   && <col style={{ width: 40 }} />}
-            {!hiddenCols.has('pmid')            && <col style={{ width: 90 }} />}
-            {!hiddenCols.has('title')           && <col style={{ width: 240 }} />}
-            {!hiddenCols.has('authors')         && <col style={{ width: 140 }} />}
-            {!hiddenCols.has('journal')         && <col style={{ width: 140 }} />}
-            {!hiddenCols.has('publicationDate') && <col style={{ width: 90 }} />}
+            {!hiddenCols.has('articleNumber')   && <col ref={(el) => { colRefs.current['articleNumber']   = el; }} style={{ width: colWidths['articleNumber']   ?? 40  }} />}
+            {!hiddenCols.has('pmid')            && <col ref={(el) => { colRefs.current['pmid']            = el; }} style={{ width: colWidths['pmid']            ?? 90  }} />}
+            {!hiddenCols.has('title')           && <col ref={(el) => { colRefs.current['title']           = el; }} style={{ width: colWidths['title']           ?? 240 }} />}
+            {!hiddenCols.has('authors')         && <col ref={(el) => { colRefs.current['authors']         = el; }} style={{ width: colWidths['authors']         ?? 140 }} />}
+            {!hiddenCols.has('journal')         && <col ref={(el) => { colRefs.current['journal']         = el; }} style={{ width: colWidths['journal']         ?? 140 }} />}
+            {!hiddenCols.has('publicationDate') && <col ref={(el) => { colRefs.current['publicationDate'] = el; }} style={{ width: colWidths['publicationDate'] ?? 90  }} />}
             {orderedVisibleLibraryCols.map((col) => (
-              <col key={col.id} style={{ width: col.width ?? 120 }} />
+              <col key={col.id} ref={(el) => { colRefs.current[col.id] = el; }} style={{ width: colWidths[col.id] ?? col.width ?? 120 }} />
             ))}
             {library.dossierEnabled && <col style={{ width: 140 }} />}
             {adminMode && <col style={{ width: 40 }} />}
@@ -797,36 +858,44 @@ export function LibraryTable({ library }: LibraryTableProps) {
                 />
               </th>
               {!hiddenCols.has('articleNumber') && (
-                <th className="cursor-pointer" onClick={() => handleSort('articleNumber')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('articleNumber')}>
                   <div className="flex items-center gap-1">#<SortIcon colId="articleNumber" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'articleNumber')} onClick={(e) => e.stopPropagation()} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('pmid') && (
-                <th className="cursor-pointer" onClick={() => handleSort('pmid')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('pmid')}>
                   <div className="flex items-center gap-1">Article ID<SortIcon colId="pmid" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'pmid')} onClick={(e) => e.stopPropagation()} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('title') && (
-                <th className="cursor-pointer" onClick={() => handleSort('title')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('title')}>
                   <div className="flex items-center gap-1">Title<SortIcon colId="title" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'title')} onClick={(e) => e.stopPropagation()} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('authors') && (
-                <th>Authors</th>
+                <th className="relative">
+                  Authors
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'authors')} onClick={(e) => e.stopPropagation()} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
+                </th>
               )}
               {!hiddenCols.has('journal') && (
-                <th className="cursor-pointer" onClick={() => handleSort('journal')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('journal')}>
                   <div className="flex items-center gap-1">Journal<SortIcon colId="journal" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'journal')} onClick={(e) => e.stopPropagation()} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('publicationDate') && (
-                <th className="cursor-pointer" onClick={() => handleSort('publicationDate')}>
+                <th className="cursor-pointer relative" onClick={() => handleSort('publicationDate')}>
                   <div className="flex items-center gap-1">Date<SortIcon colId="publicationDate" /></div>
+                  <div onMouseDown={(e) => onResizeMouseDown(e, 'publicationDate')} onClick={(e) => e.stopPropagation()} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
 
               {orderedVisibleLibraryCols.map((col) => (
-                <th key={col.id}>
+                <th key={col.id} className="relative">
                   {adminMode ? (
                     <ColumnEditor
                       column={col}
@@ -856,6 +925,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
                       Process
                     </button>
                   )}
+                  <div onMouseDown={(e) => onResizeMouseDown(e, col.id)} onClick={(e) => e.stopPropagation()} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               ))}
 

@@ -215,7 +215,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
   // ── Column resize ─────────────────────────────────────────────────────
   // Default widths for the six fixed system columns
   const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    articleNumber: 40, pmid: 90, title: 240, authors: 140, journal: 140, publicationDate: 90,
+    articleNumber: 40, pmid: 90, title: 400, authors: 140, journal: 140, publicationDate: 90,
   };
 
   // Seed state from store widths (library columns) + system defaults
@@ -227,17 +227,37 @@ export function LibraryTable({ library }: LibraryTableProps) {
     return init;
   });
 
-  // Refs to the <col> DOM nodes — keyed by column ID.
-  // We mutate these directly during drag so React re-renders are not needed.
+  // Refs to the <col> DOM nodes and the <table> itself.
+  // We mutate these directly during drag — zero React re-renders needed.
   const colRefs = useRef<Record<string, HTMLTableColElement | null>>({});
+  const tableRef = useRef<HTMLTableElement>(null);
   const resizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
-  // Tracks the final width from the last drag so onUp can persist it
+  // Tracks the width at the most recent onMove tick so onUp can persist it
   const dragWidthRef = useRef<Record<string, number>>({});
+
+  // Total pixel width of the table = sum of all visible column widths.
+  // Setting this explicitly on the <table> lets table-layout:fixed honour
+  // the <col> widths instead of distributing space to fill the container.
+  const tableWidth = useMemo(() => {
+    let w = 32; // checkbox col
+    const SYS = ['articleNumber', 'pmid', 'title', 'authors', 'journal', 'publicationDate'] as const;
+    for (const id of SYS) {
+      if (!hiddenCols.has(id)) w += colWidths[id] ?? DEFAULT_COL_WIDTHS[id];
+    }
+    for (const col of orderedVisibleLibraryCols) {
+      w += colWidths[col.id] ?? col.width ?? 120;
+    }
+    if (library.dossierEnabled) w += 140;
+    if (adminMode) w += 40;
+    return w;
+  // DEFAULT_COL_WIDTHS is stable (defined inside render but same values every time)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colWidths, hiddenCols, orderedVisibleLibraryCols, library.dossierEnabled, adminMode]);
 
   const onResizeMouseDown = useCallback((e: React.MouseEvent, colId: string) => {
     e.preventDefault();
     e.stopPropagation(); // prevent sort click from firing on the <th>
-    // Read start width from current state — no DOM read needed, no null risk
+    // Read start width from state — no DOM read, no null risk
     const startWidth = colWidths[colId] ?? DEFAULT_COL_WIDTHS[colId] ?? 120;
     resizeRef.current = { colId, startX: e.clientX, startWidth };
 
@@ -245,10 +265,16 @@ export function LibraryTable({ library }: LibraryTableProps) {
       if (!resizeRef.current) return;
       const { colId: id, startX, startWidth: sw } = resizeRef.current;
       const newWidth = Math.max(60, sw + (ev.clientX - startX));
+      const prevWidth = dragWidthRef.current[id] ?? sw;
       dragWidthRef.current[id] = newWidth;
-      // Update the <col> node directly — zero React overhead during drag
+      // Update <col> width directly
       const colEl = colRefs.current[id];
       if (colEl) colEl.style.width = `${newWidth}px`;
+      // Update table total width by the delta so other columns don't shift
+      if (tableRef.current) {
+        const current = parseInt(tableRef.current.style.width || '0', 10);
+        tableRef.current.style.width = `${current + (newWidth - prevWidth)}px`;
+      }
     };
 
     const onUp = () => {
@@ -256,9 +282,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
         const { colId: id } = resizeRef.current;
         const w = dragWidthRef.current[id];
         if (w) {
-          // Sync React state so subsequent re-renders use the new width
           setColWidths((prev) => ({ ...prev, [id]: w }));
-          // Persist for library columns (system columns reset on refresh — that's fine)
           const col = library.columns.find((c) => c.id === id);
           if (col) updateColumn(library.id, id, { width: w });
         }
@@ -832,7 +856,7 @@ export function LibraryTable({ library }: LibraryTableProps) {
 
       {/* ── Table ────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
-        <table className="data-table min-w-full">
+        <table ref={tableRef} className="data-table" style={{ width: tableWidth }}>
           <colgroup>
             <col style={{ width: 32 }} />
             {!hiddenCols.has('articleNumber')   && <col ref={(el) => { colRefs.current['articleNumber']   = el; }} style={{ width: colWidths['articleNumber']   ?? 40  }} />}

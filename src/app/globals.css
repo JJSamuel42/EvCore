@@ -132,7 +132,6 @@
 
   /* Table styles */
   .data-table {
-    min-width: 100%;
     border-collapse: collapse;
     font-size: 13px;
     table-layout: fixed;

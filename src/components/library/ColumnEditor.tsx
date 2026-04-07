@@ -67,7 +67,7 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
           align="start"
           sideOffset={4}
           className={cn(
-            'w-[480px] bg-card border border-border rounded-lg shadow-lg z-50',
+            'w-[480px] max-h-[90vh] flex flex-col bg-card border border-border rounded-lg shadow-lg z-50',
             'focus:outline-none'
           )}
         >
@@ -78,7 +78,7 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
             </Popover.Close>
           </div>
 
-          <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+          <div className="p-4 space-y-3 overflow-y-auto flex-1">
             <Input
               label="Column Name"
               value={local.name}

@@ -36,6 +36,7 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
       predefinedValues: local.predefinedValues,
       isFilter: local.isFilter,
       aiPrompt: local.aiPrompt,
+      width: local.width,
     });
     setOpen(false);
   };
@@ -154,6 +155,14 @@ export function ColumnEditor({ column, onUpdate, onDelete, children }: ColumnEdi
                 />
               </button>
             </div>
+
+            <Input
+              label="Column Width (px)"
+              type="number"
+              value={local.width ?? ''}
+              onChange={(e) => setLocal((p) => ({ ...p, width: e.target.value ? Number(e.target.value) : undefined }))}
+              placeholder="Default: 120"
+            />
 
             <Textarea
               label="AI Extraction Prompt"

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Settings2,
@@ -88,7 +88,6 @@ export function LibraryTable({ library }: LibraryTableProps) {
   const [editingCategoryHierarchy, setEditingCategoryHierarchy] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [processingCol, setProcessingCol] = useState<string | null>(null);
-  const [expandedAbstract, setExpandedAbstract] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [cellDetailModal, setCellDetailModal] = useState<{ articleId: string; colId: string; colName: string } | null>(null);
   const [showQCPanel, setShowQCPanel] = useState(false);
@@ -212,45 +211,6 @@ export function LibraryTable({ library }: LibraryTableProps) {
       return next;
     });
   };
-
-  // ── Column resize ─────────────────────────────────────────────────────
-  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    for (const col of library.columns) {
-      if (col.width) init[col.id] = col.width;
-    }
-    return init;
-  });
-  const resizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
-  // Tracks the last dragged width so onUp can persist it to the store
-  const finalWidthRef = useRef<Record<string, number>>({});
-
-  const onResizeMouseDown = useCallback((e: React.MouseEvent, colId: string) => {
-    e.preventDefault();
-    const th = (e.target as HTMLElement).closest('th'); // HTMLElement | null
-    if (!th) return;
-    resizeRef.current = { colId, startX: e.clientX, startWidth: (th as HTMLTableCellElement).offsetWidth };
-
-    const onMove = (ev: MouseEvent) => {
-      if (!resizeRef.current) return;
-      const { colId: id, startX, startWidth } = resizeRef.current;
-      const newWidth = Math.max(60, startWidth + (ev.clientX - startX));
-      finalWidthRef.current[id] = newWidth;
-      setColWidths((prev) => ({ ...prev, [id]: newWidth }));
-    };
-    const onUp = () => {
-      if (resizeRef.current) {
-        const { colId: id } = resizeRef.current;
-        const w = finalWidthRef.current[id];
-        if (w) updateColumn(library.id, id, { width: w });
-      }
-      resizeRef.current = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, [library.id, updateColumn]);
 
   // ── Named filter columns ─────────────────────────────────────────────
   const productCol = library.columns.find((c) => c.name === 'Product');
@@ -814,14 +774,14 @@ export function LibraryTable({ library }: LibraryTableProps) {
         <table className="data-table min-w-full">
           <colgroup>
             <col style={{ width: 32 }} />
-            {!hiddenCols.has('articleNumber') && <col style={{ width: colWidths['articleNumber'] ?? 40 }} />}
-            {!hiddenCols.has('pmid')          && <col style={{ width: colWidths['pmid']          ?? 96 }} />}
-            {!hiddenCols.has('title')         && <col style={{ width: colWidths['title']         ?? 220 }} />}
-            {!hiddenCols.has('authors')       && <col style={{ width: colWidths['authors']       ?? 140 }} />}
-            {!hiddenCols.has('journal')       && <col style={{ width: colWidths['journal']       ?? 140 }} />}
-            {!hiddenCols.has('publicationDate') && <col style={{ width: colWidths['publicationDate'] ?? 90 }} />}
+            {!hiddenCols.has('articleNumber')   && <col style={{ width: 40 }} />}
+            {!hiddenCols.has('pmid')            && <col style={{ width: 90 }} />}
+            {!hiddenCols.has('title')           && <col style={{ width: 240 }} />}
+            {!hiddenCols.has('authors')         && <col style={{ width: 140 }} />}
+            {!hiddenCols.has('journal')         && <col style={{ width: 140 }} />}
+            {!hiddenCols.has('publicationDate') && <col style={{ width: 90 }} />}
             {orderedVisibleLibraryCols.map((col) => (
-              <col key={col.id} style={{ width: colWidths[col.id] ?? col.width ?? 120 }} />
+              <col key={col.id} style={{ width: col.width ?? 120 }} />
             ))}
             {library.dossierEnabled && <col style={{ width: 140 }} />}
             {adminMode && <col style={{ width: 40 }} />}
@@ -837,44 +797,36 @@ export function LibraryTable({ library }: LibraryTableProps) {
                 />
               </th>
               {!hiddenCols.has('articleNumber') && (
-                <th className="cursor-pointer relative" onClick={() => handleSort('articleNumber')}>
+                <th className="cursor-pointer" onClick={() => handleSort('articleNumber')}>
                   <div className="flex items-center gap-1">#<SortIcon colId="articleNumber" /></div>
-                  <div onMouseDown={(e) => onResizeMouseDown(e, 'articleNumber')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('pmid') && (
-                <th className="cursor-pointer relative" onClick={() => handleSort('pmid')}>
+                <th className="cursor-pointer" onClick={() => handleSort('pmid')}>
                   <div className="flex items-center gap-1">Article ID<SortIcon colId="pmid" /></div>
-                  <div onMouseDown={(e) => onResizeMouseDown(e, 'pmid')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('title') && (
-                <th className="cursor-pointer relative" onClick={() => handleSort('title')}>
+                <th className="cursor-pointer" onClick={() => handleSort('title')}>
                   <div className="flex items-center gap-1">Title<SortIcon colId="title" /></div>
-                  <div onMouseDown={(e) => onResizeMouseDown(e, 'title')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('authors') && (
-                <th className="relative">
-                  Authors
-                  <div onMouseDown={(e) => onResizeMouseDown(e, 'authors')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
-                </th>
+                <th>Authors</th>
               )}
               {!hiddenCols.has('journal') && (
-                <th className="cursor-pointer relative" onClick={() => handleSort('journal')}>
+                <th className="cursor-pointer" onClick={() => handleSort('journal')}>
                   <div className="flex items-center gap-1">Journal<SortIcon colId="journal" /></div>
-                  <div onMouseDown={(e) => onResizeMouseDown(e, 'journal')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
               {!hiddenCols.has('publicationDate') && (
-                <th className="cursor-pointer relative" onClick={() => handleSort('publicationDate')}>
+                <th className="cursor-pointer" onClick={() => handleSort('publicationDate')}>
                   <div className="flex items-center gap-1">Date<SortIcon colId="publicationDate" /></div>
-                  <div onMouseDown={(e) => onResizeMouseDown(e, 'publicationDate')} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               )}
 
               {orderedVisibleLibraryCols.map((col) => (
-                <th key={col.id} className="relative">
+                <th key={col.id}>
                   {adminMode ? (
                     <ColumnEditor
                       column={col}
@@ -904,7 +856,6 @@ export function LibraryTable({ library }: LibraryTableProps) {
                       Process
                     </button>
                   )}
-                  <div onMouseDown={(e) => onResizeMouseDown(e, col.id)} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/30 transition-colors" />
                 </th>
               ))}
 
@@ -1033,21 +984,10 @@ export function LibraryTable({ library }: LibraryTableProps) {
                     </td>
                   )}
                   {!hiddenCols.has('title') && (
-                    <td className="max-w-xs">
-                      <p
-                        className="text-xs text-foreground leading-snug cursor-pointer hover:text-accent transition-colors"
-                        onClick={() =>
-                          setExpandedAbstract(expandedAbstract === article.id ? null : article.id)
-                        }
-                        title={article.title}
-                      >
+                    <td>
+                      <p className="text-xs text-foreground leading-snug" title={article.title}>
                         {truncate(article.title, 80)}
                       </p>
-                      {expandedAbstract === article.id && (
-                        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed border-t border-border pt-1.5">
-                          {article.title}
-                        </p>
-                      )}
                     </td>
                   )}
                   {!hiddenCols.has('authors') && (
